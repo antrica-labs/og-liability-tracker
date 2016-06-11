@@ -1,0 +1,15 @@
+# Don't track vert.x directories
+.vertx
+file-uploads
+
+# User-specific IDEA stuff:
+.idea/workspace.xml
+.idea/libraries
+.idea/tasks.xml
+.idea/dataSources.*
+
+# Complied output
+target
+
+# Don't track databases
+*.sqlite
