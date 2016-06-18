@@ -16,6 +16,8 @@ import org.h2.jdbc.JdbcSQLException
 import java.net.ServerSocket
 
 class ApiServer : AbstractVerticle() {
+    private val dbTestQuery = "SELECT * FROM provinces"
+
     override fun start(startFuture : Future<Void>) {
         val dbConfig = JsonObject()
                 .put("driver_class", config().getString("db.jdbc_driver"))
@@ -28,15 +30,58 @@ class ApiServer : AbstractVerticle() {
         val router = createRoutes(dbClient, eventBus)
         val listenPort = getRandomizedPort()
 
-        vertx.createHttpServer().requestHandler({ router.accept(it) }).listen(listenPort) {
-            if (it.succeeded()) {
+        val dbSetupFuture = Future.future<Void>()
+
+        // Check and setup the database if it doesn't exist
+        dbClient.getConnection {
+            if (it.failed()) {
+                dbSetupFuture.fail(it.cause())
+
+                return@getConnection
+            }
+
+            val connection = it.result()
+
+            connection.query(dbTestQuery) { query ->
+                if (query.failed()) {
+                    // A table likely doesn't exist, indicating that the database objects haven't been created
+                    val createScript = config().getString("db.create_script")
+                    vertx.eventBus().send<String>("og-liability-tracker.db_script_runner", createScript) { reply ->
+                        if (reply.failed())
+                            dbSetupFuture.fail(reply.cause())
+                        else
+                            dbSetupFuture.complete()
+                    }
+                } else {
+                    // If there are result returned from the test query, we assume the database is in working order
+                    if (query.result().numRows > 0)
+                        dbSetupFuture.complete()
+                    else
+                        dbSetupFuture.fail(Throwable("Database test query returned zero results [$dbTestQuery]"))
+                }
+            }
+        }
+
+        // We shouldn't start listening for requests until we can actually complete them, which means the DB needs to be
+        // ready and in a sane state.
+        dbSetupFuture.setHandler {
+            if (it.failed()) {
+                startFuture.fail(it.cause())
+
+                return@setHandler
+            }
+
+            // The database should be ready to go now, so start listening for requests
+            vertx.createHttpServer().requestHandler({ router.accept(it) }).listen(listenPort) {
+                if (it.failed()) {
+                    startFuture.fail(it.cause())
+
+                    return@listen
+                }
+
                 println("API Deployed: http://localhost:$listenPort")
 
                 startFuture.complete()
-            } else {
-                println("API Failed: ${it.cause().message}")
-
-                startFuture.fail(it.cause())
             }
         }
     }
