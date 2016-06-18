@@ -13,3 +13,4 @@ target
 
 # Don't track databases
 *.sqlite
+*.db
