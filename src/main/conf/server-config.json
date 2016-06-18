@@ -1,0 +1,6 @@
+{
+  "db.jdbc_driver" : "org.h2.Driver",
+  "db.file_path" : "./database/development-db",
+  "db.url_proto" : "jdbc:h2:",
+  "db.url_options" : ";AUTO_SERVER=TRUE"
+}
