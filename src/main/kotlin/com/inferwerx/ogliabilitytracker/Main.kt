@@ -6,6 +6,10 @@ import io.vertx.core.DeploymentOptions
 import io.vertx.core.Future
 
 class Main : AbstractVerticle() {
+    /**
+     * Starts all of the Vert.x verticles that are required for this server. Since most things in vertx.x are async,
+     * futures are used in order to determine when everything has started.
+     */
     override fun start(startFuture : Future<Void>) {
         val apiDeploymentOptions = DeploymentOptions().setConfig(config())
 

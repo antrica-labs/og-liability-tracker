@@ -34,4 +34,7 @@ CREATE TABLE disposed_entities (
   entity_id INTEGER,
   effective_date DATE,
   created_date DATE
-)
+);
+
+INSERT INTO provinces (name, short_name) VALUES ('Alberta', 'AB');
+INSERT INTO provinces (name, short_name) VALUES ('British Columbia', 'BC');
