@@ -4,6 +4,12 @@ CREATE TABLE provinces (
   short_name VARCHAR(2)
 );
 
+CREATE TABLE company (
+    id IDENTITY PRIMARY KEY,
+    name VARCHAR(255),
+    alt_name VARCHAR(255)
+);
+
 CREATE TABLE entity (
   id IDENTITY PRIMARY KEY,
   province_id INTEGER,
@@ -19,7 +25,7 @@ CREATE TABLE entity_info (
   calculation_type VARCHAR(255),
   pvs_value_type VARCHAR(255),
   asset_value DOUBLE DEFAULT 0,
-  liabilty_value DOUBLE DEFAULT 0,
+  liability_value DOUBLE DEFAULT 0,
   abandonment_basic DOUBLE DEFAULT 0,
   abandonment_additional_event DOUBLE DEFAULT 0,
   abandonment_gwp DOUBLE DEFAULT 0,

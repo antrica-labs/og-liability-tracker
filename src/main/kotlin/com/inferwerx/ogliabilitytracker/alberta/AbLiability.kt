@@ -1,9 +1,7 @@
 package com.inferwerx.ogliabilitytracker.alberta
 
-import java.util.Date
-
 data class AbLiability (
-        var month : Date,
+        var month : java.sql.Date,
         var type : String,
         var licence : String,
         var location : String,
@@ -20,5 +18,4 @@ data class AbLiability (
         var abandonmentSiteSpecific : Double = 0.0,
         var reclamationBasic : Double = 0.0,
         var reclamationSiteSpecific : Double = 0.0
-
 )

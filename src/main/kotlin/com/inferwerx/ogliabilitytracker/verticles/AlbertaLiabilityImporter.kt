@@ -7,7 +7,6 @@ import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
@@ -49,7 +48,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val reportMonth : Date
 
         if (dateMatcher.find())
-            reportMonth = dateFormat.parse(dateMatcher.group("date"))
+            reportMonth = java.sql.Date(dateFormat.parse(dateMatcher.group("date")).time)
         else
             throw Throwable("File format not recognized")
 
