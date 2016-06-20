@@ -17,6 +17,7 @@ CREATE TABLE entity_info (
   report_month DATE,
   entity_status VARCHAR(255),
   calculation_type VARCHAR(255),
+  pvs_value_type VARCHAR(255),
   asset_value DOUBLE DEFAULT 0,
   liabilty_value DOUBLE DEFAULT 0,
   abandonment_basic DOUBLE DEFAULT 0,
