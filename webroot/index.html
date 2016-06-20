@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <base href="/pub/" />
+
+        <meta name="viewport" content="width=device-width" />
+
+        <title>Liability Management</title>
+    </head>
+    <body>
+        <h1>Upload DDS Files</h1>
+
+        <form action="/api/upload_ab_liabilities" method="post" enctype="multipart/form-data">
+            <ul>
+                <li><label for="txt_company_name">Company:</label> <input type="text" id="txt_company_name" name="company_name" /></li>
+                <li><label for="file_uploads">Files:</label> <input type="file" id="file_uploads" name="files" multiple="multiple" /></li>
+            </ul>
+
+            <button type="submit">Submit</button>
+        </form>
+    </body>
+</html>

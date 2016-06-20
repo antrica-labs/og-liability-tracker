@@ -2,18 +2,23 @@ package com.inferwerx.ogliabilitytracker.verticles
 
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.Future
+import io.vertx.core.Handler
+import io.vertx.core.eventbus.DeliveryOptions
 import io.vertx.core.eventbus.EventBus
 import io.vertx.core.http.HttpHeaders
 import io.vertx.core.http.HttpServerResponse
 import io.vertx.core.json.Json
+import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.jdbc.JDBCClient
 import io.vertx.ext.sql.SQLConnection
 import io.vertx.ext.web.Router
+import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.StaticHandler
 import org.h2.jdbc.JdbcSQLException
 import java.net.ServerSocket
+import java.util.*
 
 class ApiServer : AbstractVerticle() {
     private val dbTestQuery = "SELECT * FROM provinces"
@@ -140,7 +145,7 @@ class ApiServer : AbstractVerticle() {
             sendError(500, context.response())
         }
 
-
+        route("/api/upload_ab_liabilities").handler(handleLiabilityUpload)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -173,6 +178,34 @@ class ApiServer : AbstractVerticle() {
     /**
      * Route handlers
      */
+
+    /**
+     * One or more DDS files can be uploaded at a time. A company name must also be specified.
+     */
+    val handleLiabilityUpload = Handler<RoutingContext> { context ->
+        val eb = context.get<EventBus>("eventbus")
+
+        val importMessages = JsonArray()
+
+        context.fileUploads().forEach {
+            val message = JsonObject()
+                    .put("fileName", it.fileName())
+                    .put("size", it.size())
+                    .put("contentType", it.contentType())
+                    .put("uploadedFileName", it.uploadedFileName())
+
+
+            eb.send<String>("og-liability-tracker.ab_importer", message.encode()) { reply ->
+                if (reply.succeeded()) {
+                    importMessages.add(JsonObject(reply.result().body().toString()))
+                } else {
+                    throw Exception(reply.cause())
+                }
+            }
+        }
+
+        context.response().endWithJson(importMessages)
+    }
 
     /**
      * An extension added to HttpServerResponse class that makes responding with JSON a little less verbose
