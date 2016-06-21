@@ -26,12 +26,14 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         vertx.eventBus().consumer<String>("og-liability-tracker.ab_importer") { message ->
             val file = JsonObject(message.body())
 
-            val path = "${System.getProperty("user.dir")}${File.separator}${file.getString("uploadedFileName")}"
+            val path = "${System.getProperty("user.dir")}${File.separator}${file.getString("fileName")}"
 
             try {
-                parseLiabilities(path)
+                val liabilities = parseLiabilities(path)
+
+                message.reply(JsonObject().put("file", file.getString("originalFileName")).put("status", "parsed").put("message", liabilities.count()).encode())
             } catch (e : Exception) {
-                // reply stating the file isn't valid
+                message.reply(JsonObject().put("file", file.getString("originalFileName")).put("status", "failed").put("message", e.cause.toString()).encode())
             }
         }
     }

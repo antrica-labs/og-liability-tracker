@@ -184,27 +184,38 @@ class ApiServer : AbstractVerticle() {
      */
     val handleLiabilityUpload = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
+        val processedFuture = Future.future<Void>()
 
         val importMessages = JsonArray()
+        var counter = 0
+        val totalFiles = context.fileUploads().count()
 
         context.fileUploads().forEach {
             val message = JsonObject()
-                    .put("fileName", it.fileName())
+                    .put("fileName", it.uploadedFileName())
+                    .put("append", context.request().formAttributes().get("append") == "on")
+                    .put("companyName", context.request().formAttributes().get("company_name"))
+                    .put("originalFileName", it.fileName())
                     .put("size", it.size())
                     .put("contentType", it.contentType())
-                    .put("uploadedFileName", it.uploadedFileName())
-
 
             eb.send<String>("og-liability-tracker.ab_importer", message.encode()) { reply ->
+                counter++
+
                 if (reply.succeeded()) {
-                    importMessages.add(JsonObject(reply.result().body().toString()))
+                    importMessages.add(JsonObject(reply.result().body()))
                 } else {
-                    throw Exception(reply.cause())
+                    importMessages.add(JsonObject().put("file", message.getString("originalFileName")).put("status", "failed").put("message", reply.cause().toString()))
                 }
+
+                if (counter == totalFiles)
+                    processedFuture.complete()
             }
         }
 
-        context.response().endWithJson(importMessages)
+        processedFuture.setHandler {
+            context.response().endWithJson(importMessages.encode())
+        }
     }
 
     /**
