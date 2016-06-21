@@ -4,21 +4,22 @@ CREATE TABLE provinces (
   short_name VARCHAR(2)
 );
 
-CREATE TABLE company (
+CREATE TABLE companies (
     id INTEGER PRIMARY KEY,
     name VARCHAR(255),
     alt_name VARCHAR(255)
 );
 
-CREATE TABLE entity (
+CREATE TABLE entities (
   id INTEGER PRIMARY KEY,
   company_id INTEGER,
   province_id INTEGER,
+  type VARCHAR(255),
   licence VARCHAR(255),
   location_identifier VARCHAR(255)
 );
 
-CREATE TABLE entity_info (
+CREATE TABLE entity_ratings (
   id INTEGER PRIMARY KEY,
   entity_id INTEGER,
   report_month DATE,
@@ -47,4 +48,4 @@ CREATE TABLE disposed_entities (
 INSERT INTO provinces (name, short_name) VALUES ('Alberta', 'AB');
 INSERT INTO provinces (name, short_name) VALUES ('British Columbia', 'BC');
 
-INSERT INTO company (name, alt_name) VALUES ('SanLing Energy Ltd', 'SanLing');
+INSERT INTO companies (name, alt_name) VALUES ('SanLing Energy Ltd', 'SanLing');

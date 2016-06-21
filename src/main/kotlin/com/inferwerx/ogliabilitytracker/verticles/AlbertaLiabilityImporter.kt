@@ -18,6 +18,7 @@ import java.util.regex.Pattern
  */
 class AlbertaLiabilityImporter : AbstractVerticle() {
     companion object {
+        const val province = "Alberta"
         const val reportMonthRegex = "Rating Data.*(?<date>\\d\\d \\D\\D\\D \\d\\d\\d\\d); "
         const val wellRegex = "W (?<licence>\\d*) ; (?<status>[^;]*); (?<location>[^;]*); \\$(?<assetvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); \\$(?<liabilityvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); (?<psv>[^;]*); (?<activity>[a-zA-Z])(.*?)(?m:^(?=[\r\n]|\\z))"
         const val facilityRegex = "F(?<licence>\\d*) *; (?<status>[^;]*); (?<location>[^;]*); (?<program>[^;]*); (?<calctype>[^;]*); \\$(?<assetvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); \\$(?<liabilityvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); (?<psv>[^;]*); (?<activity>[a-zA-Z])(.*?)(?m:^(?=[\r\n]|\\z))"
@@ -146,6 +147,13 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         return list
     }
 
+    /**
+     * Takes a list of AbLiability objects and saves them to the database. As the database is setup as entity->monthly_ratings
+     * with the licence being in the entity and the monthly ratings being children, it's important that we don't duplicated
+     * licences in the entity table. The easiest solution is to read all the entities into a HashMap so that we can look
+     * up entity ids before inserting, but this likely isn't safe as it's possible for two different connections to insert
+     * the same licence concurrently... Needs a better solution.
+     */
     private fun persistLiabilities(companyId : Int, append : Boolean, liabilities : List<AbLiability>) {
         val dbConfig = JsonObject()
                 .put("driver_class", config().getString("db.jdbc_driver"))
@@ -160,8 +168,40 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
 
             val db = connection.result()
 
+            val findProvinceSql = "SELECT id, name, short_name FROM provinces WHERE name = ?"
+            val findProvinceParams = JsonArray().add(province)
+            db.queryWithParams(findProvinceSql, findProvinceParams) { provQuery ->
+                if (provQuery.failed())
+                    throw Throwable(provQuery.cause())
 
+                val provinceId = provQuery.result().rows[0].getInteger("id")
 
+                val searchSql = "SELECT e.id, e.type, e.licence FROM entity e WHERE e.province_id = ? and e.company_id = ?"
+                val searchParams = JsonArray().add(provinceId).add(companyId)
+                db.queryWithParams(searchSql, searchParams) { searchQuery ->
+                    if (searchQuery.failed())
+                        throw Throwable(searchQuery.cause())
+
+                    // Setup a dictionary to look up entities so that we don't recreate them
+                    val entityCache = HashMap<String, Int>()
+                    searchQuery.result().rows.forEach {
+                        entityCache.put("${it.getString("type")}${it.getString("licence")}", it.getInteger("id"))
+                    }
+
+                    // Start saving the liabilities
+                    val insertEntitySql = "INSERT INTO entities (province_id, company_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
+                    val insertLiabilitySql = """
+                        INSERT INTO entity_ratings
+                        (entity_id, report_month, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific)
+                        VALUES
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """
+
+                    liabilities.forEach { liability ->
+
+                    }
+                }
+            }
         }
     }
 

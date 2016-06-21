@@ -194,7 +194,7 @@ class ApiServer : AbstractVerticle() {
             val message = JsonObject()
                     .put("fileName", it.uploadedFileName())
                     .put("append", context.request().formAttributes().get("append") == "on")
-                    .put("companyName", context.request().formAttributes().get("company_id"))
+                    .put("companyId", context.request().formAttributes().get("company_id"))
                     .put("originalFileName", it.fileName())
                     .put("size", it.size())
                     .put("contentType", it.contentType())
