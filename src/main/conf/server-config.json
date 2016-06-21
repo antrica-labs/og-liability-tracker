@@ -1,7 +1,7 @@
 {
-  "db.jdbc_driver" : "org.h2.Driver",
-  "db.file_path" : "./database/development-db",
-  "db.url_proto" : "jdbc:h2:",
-  "db.url_options" : ";AUTO_SERVER=TRUE",
-  "db.create_script" : "./database/create/h2_initial_create.sql"
+  "db.jdbc_driver" : "org.sqlite.JDBC",
+  "db.file_path" : "./database/development.sqlite",
+  "db.url_proto" : "jdbc:sqlite:",
+  "db.url_options" : "",
+  "db.create_script" : "./database/create/sqlite3_initial_create.sql"
 }

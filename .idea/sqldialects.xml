@@ -2,5 +2,6 @@
 <project version="4">
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/database/create/h2_initial_create.sql" dialect="H2" />
+    <file url="file://$PROJECT_DIR$/database/create/sqlite3_initial_create.sql" dialect="SQLite" />
   </component>
 </project>

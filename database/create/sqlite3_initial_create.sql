@@ -12,6 +12,7 @@ CREATE TABLE company (
 
 CREATE TABLE entity (
   id INTEGER PRIMARY KEY,
+  company_id INTEGER,
   province_id INTEGER,
   licence VARCHAR(255),
   location_identifier VARCHAR(255)
@@ -45,3 +46,5 @@ CREATE TABLE disposed_entities (
 
 INSERT INTO provinces (name, short_name) VALUES ('Alberta', 'AB');
 INSERT INTO provinces (name, short_name) VALUES ('British Columbia', 'BC');
+
+INSERT INTO company (name, alt_name) VALUES ('SanLing Energy Ltd', 'SanLing');

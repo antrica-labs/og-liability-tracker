@@ -2,7 +2,9 @@ package com.inferwerx.ogliabilitytracker.verticles
 
 import com.inferwerx.ogliabilitytracker.alberta.AbLiability
 import io.vertx.core.AbstractVerticle
+import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
+import io.vertx.ext.jdbc.JDBCClient
 import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.Files
@@ -31,13 +33,24 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             try {
                 val liabilities = parseLiabilities(path)
 
-                message.reply(JsonObject().put("file", file.getString("originalFileName")).put("status", "parsed").put("message", liabilities.count()).encode())
+                persistLiabilities(file.getInteger("companyId"), file.getBoolean("append"), liabilities)
+
+                message.reply(JsonObject().put("file", file.getString("originalFileName")).put("status", "parsed").put("message", "Processed ${liabilities.count()} licences").encode())
             } catch (e : Exception) {
                 message.reply(JsonObject().put("file", file.getString("originalFileName")).put("status", "failed").put("message", e.cause.toString()).encode())
             }
         }
     }
 
+    /**
+     * Using the regular expressions defined in the companion object of this class, this function reads through the text
+     * file and builds a list of liabilities.
+     *
+     * This function is blocking, but it really shouldn't take much time to parse a file and only one file gets uploaded
+     * ever month, so it likely won't be an issue.
+     *
+     * Exceptions are thrown
+     */
     private fun parseLiabilities(path : String) : List<AbLiability> {
         val list = LinkedList<AbLiability>()
         val content = readFile(path, Charset.defaultCharset())
@@ -49,14 +62,16 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.CANADA)
         val reportMonth : Date
 
+        // Every DDS file has a run date in it. This is needed for identification
         if (dateMatcher.find())
             reportMonth = java.sql.Date(dateFormat.parse(dateMatcher.group("date")).time)
         else
             throw Throwable("File format not recognized")
 
 
-        val destailsPattern = Pattern.compile(detailsRegex, Pattern.DOTALL)
+        val detailsPattern = Pattern.compile(detailsRegex, Pattern.DOTALL)
 
+        // Process the well liabilities
         while (wellMatcher.find()) {
             val well = AbLiability(
                     month = reportMonth,
@@ -69,7 +84,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                     psv = wellMatcher.group("psv")
             )
 
-            val detailsMatcher = destailsPattern.matcher(wellMatcher.group(0))
+            val detailsMatcher = detailsPattern.matcher(wellMatcher.group(0))
 
             while (detailsMatcher.find()) {
                 val tokens = detailsMatcher.group("detail").split(";")
@@ -90,11 +105,10 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                 }
             }
 
-
             list.add(well)
         }
 
-
+        // Run through the facility list
         while (facilityMatcher.find()) {
             val facility = AbLiability(
                     month = reportMonth,
@@ -108,7 +122,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                     psv = facilityMatcher.group("psv")
             )
 
-            val detailsMatcher = destailsPattern.matcher(facilityMatcher.group(0))
+            val detailsMatcher = detailsPattern.matcher(facilityMatcher.group(0))
 
             while (detailsMatcher.find()) {
                 val tokens = detailsMatcher.group("detail").split(";")
@@ -131,6 +145,26 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
 
         return list
     }
+
+    private fun persistLiabilities(companyId : Int, append : Boolean, liabilities : List<AbLiability>) {
+        val dbConfig = JsonObject()
+                .put("driver_class", config().getString("db.jdbc_driver"))
+                .put("url", "${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}")
+                .put("user", config().getString("db.username"))
+                .put("password", config().getString("db.password"))
+        val dbClient = JDBCClient.createShared(vertx, dbConfig)
+
+        dbClient.getConnection { connection ->
+            if (connection.failed())
+                throw Throwable(connection.cause())
+
+            val db = connection.result()
+
+
+
+        }
+    }
+
     /**
      * Reads a file into a string. The file should be relatively small unless you want to use a lot of memory space...
      */
