@@ -1,7 +1,7 @@
 package com.inferwerx.ogliabilitytracker.alberta
 
 data class AbLiability (
-        var month : java.sql.Date,
+        var month : java.util.Date,
         var type : String,
         var licence : String,
         var location : String,

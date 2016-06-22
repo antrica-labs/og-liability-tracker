@@ -65,7 +65,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
 
         // Every DDS file has a run date in it. This is needed for identification
         if (dateMatcher.find())
-            reportMonth = java.sql.Date(dateFormat.parse(dateMatcher.group("date")).time)
+            reportMonth = Date(dateFormat.parse(dateMatcher.group("date")).time)
         else
             throw Throwable("File format not recognized")
 

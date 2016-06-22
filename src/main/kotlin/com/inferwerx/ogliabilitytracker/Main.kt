@@ -126,6 +126,8 @@ class Main : AbstractVerticle() {
                                             dbPopulatedFuture.complete()
                                     }
                                 }
+                            } else {
+                                dbPopulatedFuture.complete()
                             }
                         }
 

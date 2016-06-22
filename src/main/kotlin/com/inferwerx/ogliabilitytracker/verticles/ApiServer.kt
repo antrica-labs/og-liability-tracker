@@ -149,12 +149,12 @@ class ApiServer : AbstractVerticle() {
             val message = JsonObject()
                     .put("fileName", it.uploadedFileName())
                     .put("append", context.request().formAttributes().get("append") == "on")
-                    .put("companyId", context.request().formAttributes().get("company_id"))
+                    .put("companyId", context.request().formAttributes().get("company_id").toInt())
                     .put("originalFileName", it.fileName())
                     .put("size", it.size())
                     .put("contentType", it.contentType())
 
-            eb.send<String>("og-liability-tracker.ab_importer", message.encode()) { reply ->
+            eb.send<String>("og-liability-tracker.ab_importer", message.encode(), DeliveryOptions().setSendTimeout(600000)) { reply ->
                 counter++
 
                 if (reply.succeeded()) {
