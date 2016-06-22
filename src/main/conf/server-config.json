@@ -3,5 +3,6 @@
   "db.file_path" : "./database/development.sqlite",
   "db.url_proto" : "jdbc:sqlite:",
   "db.url_options" : "",
-  "db.create_script" : "./database/create/sqlite3_initial_create.sql"
+  "db.create_script_folder" : "./database/create/sqlite",
+  "db.populate_script_folder" : "./database/populate"
 }

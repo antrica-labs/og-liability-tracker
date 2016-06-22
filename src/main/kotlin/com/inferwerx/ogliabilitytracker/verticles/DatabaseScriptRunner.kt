@@ -21,39 +21,39 @@ class DatabaseScriptRunner : AbstractVerticle() {
 
         // Read file names from the event bus
         vertx.eventBus().consumer<String>("og-liability-tracker.db_script_runner") { message ->
-            var file = message.body()
+            val file = message.body()
 
-            // Get the SQL script inside of the file
-            vertx.fileSystem().readFile(file, { result ->
-                if (result.failed()) {
-                    message.reply(JsonObject().put("status", "failed").put("cause", result.cause().message).encode())
+            try {
+                // Get the SQL script inside of the file
+                vertx.fileSystem().readFile(file) { result ->
+                    if (result.failed())
+                        throw result.cause()
 
-                    return@readFile
-                } else {
-                    var buffer = result.result()
+                    val buffer = result.result()
 
                     dbClient.getConnection { connection ->
-                        if (connection.failed()) {
-                            message.reply(JsonObject().put("status", "failed").put("cause", connection.cause().message).encode())
+                        if (connection.failed())
+                            throw result.cause()
 
-                            return@getConnection
-                        }
-
-                        var db = connection.result()
+                        val db = connection.result()
 
                         // Execute the script as is... this is probably not the safest thing to do, but it's the simplest
-                        db.execute(buffer.toString(), { query ->
+                        db.execute(buffer.toString()) { query ->
                             if (query.failed()) {
-                                message.reply(JsonObject().put("status", "failed").put("cause", query.cause().message).encode())
-                            } else {
-                                message.reply(JsonObject().put("status", "success").encode())
+                                db.close()
+
+                                throw query.cause()
                             }
 
+                            message.reply(JsonObject().put("status", "success").encode())
                             db.close()
-                        })
+                        }
                     }
+
                 }
-            })
+            } catch (t : Throwable) {
+                message.reply(JsonObject().put("status", "failed").put("cause", t.cause.toString()).encode())
+            }
         }
 
     }

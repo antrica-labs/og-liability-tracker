@@ -1,0 +1,1 @@
+INSERT INTO provinces (name, short_name) VALUES ('Alberta', 'AB')
