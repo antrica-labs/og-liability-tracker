@@ -33,7 +33,6 @@ class Main : AbstractVerticle() {
 
         val dbScriptRunnerFuture = Future.future<Void>() // Used to determine if the db script runner verticle started
         val importStartFuture = Future.future<Void>()    // Used to determine if the liability importer verticles started
-        val importDeploymentErrors = LinkedList<Throwable>()
 
         val apiDeploymentOptions = DeploymentOptions().setConfig(config())
         val workerDeploymentOptions = DeploymentOptions().setWorker(true).setConfig(config())
@@ -46,19 +45,11 @@ class Main : AbstractVerticle() {
                 dbScriptRunnerFuture.complete()
         }
 
-        // Create as many importer verticles as there are CPU cores for faster processing
-        for (i in 1..Runtime.getRuntime().availableProcessors()) {
-            vertx.deployVerticle(AlbertaLiabilityImporter(), workerDeploymentOptions) {
-                if (it.failed())
-                    importDeploymentErrors.add(it.cause())
-
-                if (i == Runtime.getRuntime().availableProcessors()) {
-                    if (importDeploymentErrors.count() > 0)
-                        importStartFuture.fail(MultiAsyncException(importDeploymentErrors))
-                    else
-                        importStartFuture.complete()
-                }
-            }
+        vertx.deployVerticle(AlbertaLiabilityImporter(), workerDeploymentOptions) {
+            if (it.failed())
+                importStartFuture.fail(it.cause())
+            else
+                importStartFuture.complete()
         }
 
         try {

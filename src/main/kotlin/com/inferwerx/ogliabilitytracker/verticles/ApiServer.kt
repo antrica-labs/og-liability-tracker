@@ -100,7 +100,7 @@ class ApiServer : AbstractVerticle() {
             sendError(500, context.response())
         }
 
-        route("/api/upload_ab_liabilities").handler(handleLiabilityUpload)
+        route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -137,39 +137,35 @@ class ApiServer : AbstractVerticle() {
     /**
      * One or more DDS files can be uploaded at a time. A company name must also be specified.
      */
-    val handleLiabilityUpload = Handler<RoutingContext> { context ->
+    val handleAbLiabilityUpload = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
         val processedFuture = Future.future<Void>()
 
-        val importMessages = JsonArray()
-        var counter = 0
-        val totalFiles = context.fileUploads().count()
+        val message = JsonObject()
+        val uploadedFiles = JsonArray()
+
+        message.put("append", context.request().formAttributes().get("append") == "on")
+        message.put("company", context.request().formAttributes().get("company_id").toInt())
 
         context.fileUploads().forEach {
-            val message = JsonObject()
-                    .put("fileName", it.uploadedFileName())
-                    .put("append", context.request().formAttributes().get("append") == "on")
-                    .put("companyId", context.request().formAttributes().get("company_id").toInt())
-                    .put("originalFileName", it.fileName())
-                    .put("size", it.size())
-                    .put("contentType", it.contentType())
+            val file = JsonObject()
 
-            eb.send<String>("og-liability-tracker.ab_importer", message.encode(), DeliveryOptions().setSendTimeout(600000)) { reply ->
-                counter++
+            file.put("fileName", it.uploadedFileName())
+            file.put("originalFileName", it.fileName())
+            file.put("size", it.size())
+            file.put("contentType", it.contentType())
 
-                if (reply.succeeded()) {
-                    importMessages.add(JsonObject(reply.result().body()))
-                } else {
-                    importMessages.add(JsonObject().put("file", message.getString("originalFileName")).put("status", "failed").put("message", reply.cause().toString()))
-                }
-
-                if (counter == totalFiles)
-                    processedFuture.complete()
-            }
+            uploadedFiles.add(file)
         }
 
-        processedFuture.setHandler {
-            context.response().endWithJson(importMessages.encode())
+        message.put("uploadedFiles", uploadedFiles)
+
+        // Send message to the importer worker with a 10 minute timeout
+        eb.send<String>("og-liability-tracker.ab_importer", message.encode(), DeliveryOptions().setSendTimeout(600000)) { reply ->
+            if (reply.succeeded())
+                context.response().endWithJson(reply.result())
+            else
+                context.response().endWithJson(JsonObject().put("status", "failed").put("message", reply.cause().toString()))
         }
     }
 

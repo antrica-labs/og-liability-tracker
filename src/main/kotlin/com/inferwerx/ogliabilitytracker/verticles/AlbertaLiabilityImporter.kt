@@ -2,14 +2,17 @@ package com.inferwerx.ogliabilitytracker.verticles
 
 import com.inferwerx.ogliabilitytracker.alberta.AbLiability
 import io.vertx.core.AbstractVerticle
-import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
-import io.vertx.ext.jdbc.JDBCClient
 import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.sql.Connection
+import java.sql.DriverManager
+import java.sql.PreparedStatement
+import java.sql.Statement
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.*
 import java.util.regex.Pattern
 
@@ -18,7 +21,6 @@ import java.util.regex.Pattern
  */
 class AlbertaLiabilityImporter : AbstractVerticle() {
     companion object {
-        const val province = "Alberta"
         const val reportMonthRegex = "Rating Data.*(?<date>\\d\\d \\D\\D\\D \\d\\d\\d\\d); "
         const val wellRegex = "W (?<licence>\\d*) ; (?<status>[^;]*); (?<location>[^;]*); \\$(?<assetvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); \\$(?<liabilityvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); (?<psv>[^;]*); (?<activity>[a-zA-Z])(.*?)(?m:^(?=[\r\n]|\\z))"
         const val facilityRegex = "F(?<licence>\\d*) *; (?<status>[^;]*); (?<location>[^;]*); (?<program>[^;]*); (?<calctype>[^;]*); \\$(?<assetvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); \\$(?<liabilityvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); (?<psv>[^;]*); (?<activity>[a-zA-Z])(.*?)(?m:^(?=[\r\n]|\\z))"
@@ -27,18 +29,26 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
 
     override fun start() {
         vertx.eventBus().consumer<String>("og-liability-tracker.ab_importer") { message ->
-            val file = JsonObject(message.body())
+            val job = JsonObject(message.body())
+            val files = job.getJsonArray("uploadedFiles")
+            val company = job.getInteger("company")
+            val append = job.getBoolean("append")
 
-            val path = "${System.getProperty("user.dir")}${File.separator}${file.getString("fileName")}"
+            val liabilities = LinkedList<AbLiability>()
 
             try {
-                val liabilities = parseLiabilities(path)
+                files.forEach {
+                    val file = JsonObject(it.toString())
+                    val path = "${System.getProperty("user.dir")}${File.separator}${file.getString("fileName")}"
 
-                persistLiabilities(file.getInteger("companyId"), file.getBoolean("append"), liabilities)
+                    liabilities.addAll(parseLiabilities(path))
+                }
 
-                message.reply(JsonObject().put("file", file.getString("originalFileName")).put("status", "parsed").put("message", "Processed ${liabilities.count()} licences").encode())
+                val rows = persistLiabilities(company, append, liabilities);
+
+                message.reply(JsonObject().put("status", "imported").put("message", "Saved ${rows} rating records").encode())
             } catch (e : Exception) {
-                message.reply(JsonObject().put("file", file.getString("originalFileName")).put("status", "failed").put("message", e.cause.toString()).encode())
+                message.reply(JsonObject().put("status", "failed").put("message", e.cause.toString()).encode())
             }
         }
     }
@@ -61,11 +71,11 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val facilityMatcher = Pattern.compile(facilityRegex, Pattern.DOTALL).matcher(content)
 
         val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.CANADA)
-        val reportMonth : Date
+        val reportMonth : Instant
 
         // Every DDS file has a run date in it. This is needed for identification
         if (dateMatcher.find())
-            reportMonth = Date(dateFormat.parse(dateMatcher.group("date")).time)
+            reportMonth = Instant.ofEpochMilli(dateFormat.parse(dateMatcher.group("date")).time)
         else
             throw Throwable("File format not recognized")
 
@@ -147,6 +157,105 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         return list
     }
 
+
+    /**
+     * Takes a list of liability ratings and attempts to get them saved in the database
+     */
+    private fun persistLiabilities(companyId : Int, append : Boolean, liabilities : List<AbLiability>) : Int {
+        Class.forName(config().getString("db.jdbc_driver"))
+
+        var recordsPersisted = 0
+        var connection : Connection? = null
+
+        try {
+            connection =  DriverManager.getConnection("${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}", config().getString("db.username"), config().getString("db.password"))
+
+            val provinceId = getProvince(connection)
+
+            if (append == false)
+                clearExistingRatings(connection, provinceId, companyId)
+
+            recordsPersisted = insertLiabilities(connection, provinceId, companyId, liabilities)
+        } finally {
+            connection?.close()
+        }
+
+        return recordsPersisted
+    }
+
+    /**
+     *  Gets the ID of the Alberta record in the database
+     */
+    private fun getProvince(connection : Connection) : Int {
+        val findProvinceSql = "SELECT id, name, short_name FROM provinces WHERE name = 'Alberta'"
+        val provinceId : Int
+
+        var statement : Statement? = null
+
+        try {
+            statement = connection.createStatement()
+
+            val rs = statement.executeQuery(findProvinceSql)
+
+            if (rs.next())
+                provinceId = rs.getInt(1)
+            else
+                throw Exception("Unable to find Alberta in the database")
+        } finally {
+            statement?.close()
+        }
+
+        return provinceId
+    }
+
+    /**
+     * Returns a HashMap containing all of the entities under the given company and province.
+     */
+    private fun getExistingEntities(connection : Connection, provinceId : Int, companyId : Int) : HashMap<String, Int> {
+        val allEntitiesSql = "SELECT e.id, e.type, e.licence FROM entity e WHERE e.province_id = ? and e.company_id = ?"
+        val dictionary = HashMap<String, Int>()
+
+        var statement : PreparedStatement? = null
+
+        try {
+
+            statement = connection.prepareStatement(allEntitiesSql)
+
+            statement.setInt(1, provinceId)
+            statement.setInt(2, companyId)
+
+            val rs = statement.executeQuery()
+
+            while (rs.next()) {
+                dictionary.put("${rs.getString(2)}${rs.getString(3)}", rs.getInt(1))
+            }
+        } finally {
+            statement?.close()
+        }
+
+        return dictionary
+    }
+
+    /**
+     * Deletes all entity ratings from company, but leaves the entities alone
+     */
+    private fun clearExistingRatings(connection : Connection, provinceId : Int, companyId : Int) {
+        val clearRatingsSql = "DELETE FROM entity_ratings WHERE province_id = ? AND company_id = ?"
+
+        var statement : PreparedStatement? = null
+
+        try {
+            statement = connection.prepareStatement(clearRatingsSql)
+
+            statement.setInt(1, provinceId)
+            statement.setInt(2, companyId)
+
+            statement.executeUpdate()
+        } finally {
+            statement?.close()
+        }
+    }
+
     /**
      * Takes a list of AbLiability objects and saves them to the database. As the database is setup as entity->monthly_ratings
      * with the licence being in the entity and the monthly ratings being children, it's important that we don't duplicated
@@ -154,55 +263,67 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      * up entity ids before inserting, but this likely isn't safe as it's possible for two different connections to insert
      * the same licence concurrently... Needs a better solution.
      */
-    private fun persistLiabilities(companyId : Int, append : Boolean, liabilities : List<AbLiability>) {
-        val dbConfig = JsonObject()
-                .put("driver_class", config().getString("db.jdbc_driver"))
-                .put("url", "${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}")
-                .put("user", config().getString("db.username"))
-                .put("password", config().getString("db.password"))
-        val dbClient = JDBCClient.createShared(vertx, dbConfig)
+    private fun insertLiabilities(connection : Connection, provinceId : Int, companyId : Int, liabilities : List<AbLiability>) : Int {
+        val insertEntitySql = "INSERT INTO entities (province_id, company_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
+        val insertLiabilitySql = "INSERT INTO entity_ratings (entity_id, report_month, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-        dbClient.getConnection { connection ->
-            if (connection.failed())
-                throw Throwable(connection.cause())
+        var savedRatingsCount = 0
 
-            val db = connection.result()
+        var entityLookup = getExistingEntities(connection, provinceId, companyId)
 
-            val findProvinceSql = "SELECT id, name, short_name FROM provinces WHERE name = ?"
-            val findProvinceParams = JsonArray().add(province)
-            db.queryWithParams(findProvinceSql, findProvinceParams) { provQuery ->
-                if (provQuery.failed())
-                    throw Throwable(provQuery.cause())
+        var entityStatement : PreparedStatement? = null
+        var liabilityStatement : PreparedStatement? = null
 
-                val provinceId = provQuery.result().rows[0].getInteger("id")
+        try {
+            entityStatement = connection.prepareStatement(insertEntitySql)
+            liabilityStatement = connection.prepareStatement(insertLiabilitySql)
 
-                val searchSql = "SELECT e.id, e.type, e.licence FROM entity e WHERE e.province_id = ? and e.company_id = ?"
-                val searchParams = JsonArray().add(provinceId).add(companyId)
-                db.queryWithParams(searchSql, searchParams) { searchQuery ->
-                    if (searchQuery.failed())
-                        throw Throwable(searchQuery.cause())
+            for (item in liabilities) {
+                if (!entityLookup.contains("${item.type}${item.licence}")) {
+                    entityStatement.setInt(1, provinceId)
+                    entityStatement.setInt(2, companyId)
+                    entityStatement.setString(3, item.type)
+                    entityStatement.setString(4, item.licence)
+                    entityStatement.setString(5, item.location)
 
-                    // Setup a dictionary to look up entities so that we don't recreate them
-                    val entityCache = HashMap<String, Int>()
-                    searchQuery.result().rows.forEach {
-                        entityCache.put("${it.getString("type")}${it.getString("licence")}", it.getInteger("id"))
-                    }
-
-                    // Start saving the liabilities
-                    val insertEntitySql = "INSERT INTO entities (province_id, company_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
-                    val insertLiabilitySql = """
-                        INSERT INTO entity_ratings
-                        (entity_id, report_month, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific)
-                        VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """
-
-                    liabilities.forEach { liability ->
-
-                    }
+                    entityStatement.addBatch()
                 }
             }
+
+            entityStatement.executeBatch()
+
+            // Now that we have added all of the missing liabilities we can refresh the lookup
+            entityLookup = getExistingEntities(connection, provinceId, companyId)
+
+            for (item in liabilities) {
+                val pk = entityLookup.get("${item.type}${item.licence}") ?: throw Exception("Unable to get an entity match on one or more ratings")
+
+                liabilityStatement.setInt(1, pk)
+                liabilityStatement.setLong(2, item.month.toEpochMilli())
+                liabilityStatement.setString(3, item.status)
+                if (item.calculationType != null) liabilityStatement.setString(4, item.calculationType)
+                liabilityStatement.setString(5, item.psv)
+                liabilityStatement.setDouble(6, item.assetValue)
+                liabilityStatement.setDouble(7, item.liabilityValue)
+                liabilityStatement.setDouble(8, item.abandonmentBasic)
+                liabilityStatement.setDouble(9, item.abandonmentAdditionalEvent)
+                liabilityStatement.setDouble(10, item.abandonmentGwp)
+                liabilityStatement.setDouble(11, item.abandonmentGasMigration)
+                liabilityStatement.setDouble(12, item.abandonmentVentFlow)
+                liabilityStatement.setDouble(13, item.abandonmentSiteSpecific)
+                liabilityStatement.setDouble(14, item.reclamationBasic)
+                liabilityStatement.setDouble(15, item.reclamationSiteSpecific)
+
+                liabilityStatement.addBatch()
+            }
+
+            savedRatingsCount = liabilityStatement.executeBatch().size
+        } finally {
+            entityStatement?.close()
+            liabilityStatement?.close()
         }
+
+        return savedRatingsCount
     }
 
     /**
