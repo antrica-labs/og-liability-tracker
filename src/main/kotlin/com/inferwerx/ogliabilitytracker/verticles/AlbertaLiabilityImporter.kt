@@ -34,22 +34,29 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             val company = job.getInteger("company")
             val append = job.getBoolean("append")
 
-            val liabilities = LinkedList<AbLiability>()
+            vertx.executeBlocking<String>({ future ->
+                val liabilities = LinkedList<AbLiability>()
 
-            try {
-                files.forEach {
-                    val file = JsonObject(it.toString())
-                    val path = "${System.getProperty("user.dir")}${File.separator}${file.getString("fileName")}"
+                try {
+                    files.forEach {
+                        val file = JsonObject(it.toString())
+                        val path = "${System.getProperty("user.dir")}${File.separator}${file.getString("fileName")}"
 
-                    liabilities.addAll(parseLiabilities(path))
+                        liabilities.addAll(parseLiabilities(path))
+                    }
+
+                    val rows = persistLiabilities(company, append, liabilities);
+
+                    future.complete("Saved ${rows} rating records")
+                } catch (t : Throwable) {
+                    future.fail(t)
                 }
-
-                val rows = persistLiabilities(company, append, liabilities);
-
-                message.reply(JsonObject().put("status", "imported").put("message", "Saved ${rows} rating records").encode())
-            } catch (e : Exception) {
-                message.reply(JsonObject().put("status", "failed").put("message", e.cause.toString()).encode())
-            }
+            }, {
+                if (it.succeeded())
+                    message.reply(JsonObject().put("status", "success").put("message", it.result()).encode())
+                else
+                    message.reply(JsonObject().put("status", "failed").put("message", it.cause().cause).encode())
+            })
         }
     }
 
