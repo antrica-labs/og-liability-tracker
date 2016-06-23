@@ -164,7 +164,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
     private fun persistLiabilities(companyId : Int, append : Boolean, liabilities : List<AbLiability>) : Int {
         Class.forName(config().getString("db.jdbc_driver"))
 
-        var recordsPersisted = 0
+        var recordsPersisted : Int
         var connection : Connection? = null
 
         try {
@@ -212,7 +212,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      * Returns a HashMap containing all of the entities under the given company and province.
      */
     private fun getExistingEntities(connection : Connection, provinceId : Int, companyId : Int) : HashMap<String, Int> {
-        val allEntitiesSql = "SELECT e.id, e.type, e.licence FROM entity e WHERE e.province_id = ? and e.company_id = ?"
+        val allEntitiesSql = "SELECT e.id, e.type, e.licence FROM entities e WHERE e.province_id = ? and e.company_id = ?"
         val dictionary = HashMap<String, Int>()
 
         var statement : PreparedStatement? = null
@@ -240,7 +240,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      * Deletes all entity ratings from company, but leaves the entities alone
      */
     private fun clearExistingRatings(connection : Connection, provinceId : Int, companyId : Int) {
-        val clearRatingsSql = "DELETE FROM entity_ratings WHERE province_id = ? AND company_id = ?"
+        val clearRatingsSql = "DELETE FROM entity_ratings WHERE entity_id in (SELECT id FROM entities WHERE province_id = ? AND company_id = ?)"
 
         var statement : PreparedStatement? = null
 
@@ -267,7 +267,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val insertEntitySql = "INSERT INTO entities (province_id, company_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
         val insertLiabilitySql = "INSERT INTO entity_ratings (entity_id, report_month, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-        var savedRatingsCount = 0
+        var savedRatingsCount : Int
 
         var entityLookup = getExistingEntities(connection, provinceId, companyId)
 

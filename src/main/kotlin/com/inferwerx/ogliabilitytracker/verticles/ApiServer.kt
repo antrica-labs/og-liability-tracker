@@ -139,7 +139,6 @@ class ApiServer : AbstractVerticle() {
      */
     val handleAbLiabilityUpload = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
-        val processedFuture = Future.future<Void>()
 
         val message = JsonObject()
         val uploadedFiles = JsonArray()
@@ -163,7 +162,7 @@ class ApiServer : AbstractVerticle() {
         // Send message to the importer worker with a 10 minute timeout
         eb.send<String>("og-liability-tracker.ab_importer", message.encode(), DeliveryOptions().setSendTimeout(600000)) { reply ->
             if (reply.succeeded())
-                context.response().endWithJson(reply.result())
+                context.response().endWithJson(JsonObject(reply.result().body()))
             else
                 context.response().endWithJson(JsonObject().put("status", "failed").put("message", reply.cause().toString()))
         }
