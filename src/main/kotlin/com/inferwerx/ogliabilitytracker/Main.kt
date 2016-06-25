@@ -8,6 +8,7 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.CompositeFuture
 import io.vertx.core.DeploymentOptions
 import io.vertx.core.Future
+import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.jdbc.JDBCClient
 import java.util.*
@@ -75,17 +76,17 @@ class Main : AbstractVerticle() {
                         if (query.failed()) {
                             // A table likely doesn't exist, indicating that the database objects haven't been created
                             val scripts = vertx.fileSystem().readDirBlocking(config().getString("db.create_script_folder"))
-                            var counter = 0
-                            scripts.forEach { file ->
-                                vertx.eventBus().send<String>("og-liability-tracker.db_script_runner", file) { reply ->
-                                    counter++
 
-                                    if (reply.failed())
-                                        throw reply.cause()
+                            val array = JsonArray()
+                            for (script in scripts) {
+                                array.add(script)
+                            }
 
-                                    if (counter == scripts.count())
-                                        dbCreateFuture.complete()
-                                }
+                            vertx.eventBus().send<String>("og-liability-tracker.db_script_runner", JsonObject().put("scripts", array).encode()) { reply ->
+                                if (reply.failed())
+                                    throw reply.cause()
+
+                                dbCreateFuture.complete()
                             }
                         } else {
                             dbCreateFuture.complete()
@@ -105,17 +106,17 @@ class Main : AbstractVerticle() {
                             if (query.result().numRows == 0) {
                                 // The database is empty, so populate it with the basics...
                                 val scripts = vertx.fileSystem().readDirBlocking(config().getString("db.populate_script_folder"))
-                                var counter = 0
-                                scripts.forEach { file ->
-                                    vertx.eventBus().send<String>("og-liability-tracker.db_script_runner", file) { reply ->
-                                        counter++
 
-                                        if (reply.failed())
-                                            throw reply.cause()
+                                val array = JsonArray()
+                                for (script in scripts) {
+                                    array.add(script)
+                                }
 
-                                        if (counter == scripts.count())
-                                            dbPopulatedFuture.complete()
-                                    }
+                                vertx.eventBus().send<String>("og-liability-tracker.db_script_runner", JsonObject().put("scripts", array).encode()) { reply ->
+                                    if (reply.failed())
+                                        throw reply.cause()
+
+                                    dbPopulatedFuture.complete()
                                 }
                             } else {
                                 dbPopulatedFuture.complete()

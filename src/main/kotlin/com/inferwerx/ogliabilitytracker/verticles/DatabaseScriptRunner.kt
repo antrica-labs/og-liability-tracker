@@ -3,6 +3,12 @@ package com.inferwerx.ogliabilitytracker.verticles
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.jdbc.JDBCClient
+import java.nio.charset.Charset
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.sql.Connection
+import java.sql.DriverManager
+import java.sql.Statement
 
 /**
  * This verticle is used to run SQL scripts from files. It useful for creating database objects and running tasks.
@@ -12,49 +18,52 @@ import io.vertx.ext.jdbc.JDBCClient
  */
 class DatabaseScriptRunner : AbstractVerticle() {
     override fun start() {
-        val dbConfig = JsonObject()
-                .put("driver_class", config().getString("db.jdbc_driver"))
-                .put("url", "${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}")
-                .put("user", config().getString("db.username"))
-                .put("password", config().getString("db.password"))
-        val dbClient = JDBCClient.createShared(vertx, dbConfig)
-
-        // Read file names from the event bus
         vertx.eventBus().consumer<String>("og-liability-tracker.db_script_runner") { message ->
-            val file = message.body()
+            val job = JsonObject(message.body())
+            val scripts = job.getJsonArray("scripts")
+            var counter = 0
 
-            try {
-                // Get the SQL script inside of the file
-                vertx.fileSystem().readFile(file) { result ->
-                    if (result.failed())
-                        throw result.cause()
+            vertx.executeBlocking<Void>({ future ->
+                Class.forName(config().getString("db.jdbc_driver"))
 
-                    val buffer = result.result()
+                var connection : Connection? = null
+                var statement : Statement? = null
 
-                    dbClient.getConnection { connection ->
-                        if (connection.failed())
-                            throw result.cause()
+                try {
+                    connection = DriverManager.getConnection("${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}", config().getString("db.username"), config().getString("db.password"))
+                    statement = connection.createStatement()
 
-                        val db = connection.result()
+                    for (script in scripts) {
+                        val content = readFile(script.toString(), Charset.defaultCharset())
 
-                        // Execute the script as is... this is probably not the safest thing to do, but it's the simplest
-                        db.execute(buffer.toString()) { query ->
-                            if (query.failed()) {
-                                db.close()
+                        statement.execute(content)
 
-                                throw query.cause()
-                            }
-
-                            message.reply(JsonObject().put("status", "success").encode())
-                            db.close()
-                        }
+                        counter++
                     }
 
-                }
-            } catch (t : Throwable) {
-                message.reply(JsonObject().put("status", "failed").put("cause", t.cause.toString()).encode())
-            }
-        }
+                    future.complete()
+                } catch (t : Throwable) {
+                    future.fail(t)
 
+                    connection?.close()
+                }
+            }, {
+                if (it.succeeded())
+                    message.reply(JsonObject().put("message", "Executed ${counter} scripts").put("counter", counter).encode())
+                else
+                    message.fail(1, it.cause().toString())
+            })
+        }
+    }
+
+
+
+    /**
+     * Reads a file into a string. The file should be relatively small unless you want to use a lot of memory space...
+     */
+    private fun readFile(path : String, encoding: Charset) : String {
+        val bytes = Files.readAllBytes(Paths.get(path));
+
+        return String(bytes, encoding)
     }
 }

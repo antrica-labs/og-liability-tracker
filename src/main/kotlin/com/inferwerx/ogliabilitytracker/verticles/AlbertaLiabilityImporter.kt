@@ -55,7 +55,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                 if (it.succeeded())
                     message.reply(JsonObject().put("status", "success").put("message", it.result()).encode())
                 else
-                    message.reply(JsonObject().put("status", "failed").put("message", it.cause().cause).encode())
+                    message.fail(1, it.cause().toString())
             })
         }
     }
