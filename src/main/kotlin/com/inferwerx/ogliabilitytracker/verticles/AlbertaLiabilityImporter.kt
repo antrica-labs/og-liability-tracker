@@ -21,7 +21,7 @@ import java.util.regex.Pattern
  */
 class AlbertaLiabilityImporter : AbstractVerticle() {
     companion object {
-        const val reportMonthRegex = "Rating Data.*(?<date>\\d\\d \\D\\D\\D \\d\\d\\d\\d); "
+        const val reportMonthRegex = "Rating Data.*(?<date>\\d\\d \\D\\D\\D \\d\\d\\d\\d); \\d"
         const val wellRegex = "W (?<licence>\\d*) ; (?<status>[^;]*); (?<location>[^;]*); \\$(?<assetvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); \\$(?<liabilityvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); (?<psv>[^;]*); (?<activity>[a-zA-Z])(.*?)(?m:^(?=[\r\n]|\\z))"
         const val facilityRegex = "F(?<licence>\\d*) *; (?<status>[^;]*); (?<location>[^;]*); (?<program>[^;]*); (?<calctype>[^;]*); \\$(?<assetvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); \\$(?<liabilityvalue>(([1-9]\\d{0,2}(,\\d{3})*)|(([1-9]\\d*)?\\d))(\\.\\d\\d)); (?<psv>[^;]*); (?<activity>[a-zA-Z])(.*?)(?m:^(?=[\r\n]|\\z))"
         const val detailsRegex = ";;(?<detail>[^\\n]*)"
@@ -81,11 +81,14 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val reportMonth : Instant
 
         // Every DDS file has a run date in it. This is needed for identification
-        if (dateMatcher.find())
-            reportMonth = Instant.ofEpochMilli(dateFormat.parse(dateMatcher.group("date")).time)
-        else
-            throw Throwable("File format not recognized")
+        if (dateMatcher.find()) {
+            val dateString = dateMatcher.group("date")
+            val date = dateFormat.parse(dateString)
 
+            reportMonth = Instant.ofEpochMilli(date.time)
+        } else {
+            throw Throwable("File format not recognized")
+        }
 
         val detailsPattern = Pattern.compile(detailsRegex, Pattern.DOTALL)
 
@@ -311,7 +314,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                 val pk = entityLookup.get("${item.type}${item.licence}") ?: throw Exception("Unable to get an entity match on one or more ratings")
 
                 liabilityStatement.setInt(1, pk)
-                liabilityStatement.setLong(2, item.month.toEpochMilli())
+                liabilityStatement.setLong(2, item.month.toEpochMilli() / 1000)
                 liabilityStatement.setString(3, item.status)
                 if (item.calculationType != null) liabilityStatement.setString(4, item.calculationType)
                 liabilityStatement.setString(5, item.psv)
