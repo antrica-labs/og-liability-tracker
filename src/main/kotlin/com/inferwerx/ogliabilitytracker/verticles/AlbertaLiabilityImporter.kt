@@ -274,7 +274,8 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val insertEntitySql = "INSERT INTO entities (province_id, company_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
         val insertLiabilitySql = "INSERT INTO entity_ratings (entity_id, report_month, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-        var savedRatingsCount : Int
+        val autoCommitBackup = connection.autoCommit
+        val savedRatingsCount : Int
 
         var entityLookup = getExistingEntities(connection, provinceId, companyId)
 
@@ -282,6 +283,8 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         var liabilityStatement : PreparedStatement? = null
 
         try {
+            connection.autoCommit = false
+
             entityStatement = connection.prepareStatement(insertEntitySql)
             liabilityStatement = connection.prepareStatement(insertLiabilitySql)
 
@@ -298,6 +301,8 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             }
 
             entityStatement.executeBatch()
+
+            connection.commit()
 
             // Now that we have added all of the missing liabilities we can refresh the lookup
             entityLookup = getExistingEntities(connection, provinceId, companyId)
@@ -325,9 +330,13 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             }
 
             savedRatingsCount = liabilityStatement.executeBatch().size
+
+            connection.commit()
         } finally {
             entityStatement?.close()
             liabilityStatement?.close()
+
+            connection.autoCommit = autoCommitBackup
         }
 
         return savedRatingsCount
