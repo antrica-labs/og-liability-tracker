@@ -4,5 +4,6 @@
   "db.url_proto" : "jdbc:sqlite:",
   "db.url_options" : "",
   "db.create_script_folder" : "./database/create/sqlite",
-  "db.populate_script_folder" : "./database/populate"
+  "db.populate_script_folder" : "./database/populate",
+  "http.port" : 1337
 }

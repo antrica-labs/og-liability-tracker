@@ -33,7 +33,7 @@ class ApiServer : AbstractVerticle() {
         val eventBus = vertx.eventBus()
 
         val router = createRoutes(dbClient, eventBus)
-        val listenPort = getRandomizedPort()
+        val listenPort = config().getInteger("http.port") ?: getRandomizedPort()
 
         vertx.createHttpServer().requestHandler({ router.accept(it) }).listen(listenPort) {
             if (it.succeeded()) {
