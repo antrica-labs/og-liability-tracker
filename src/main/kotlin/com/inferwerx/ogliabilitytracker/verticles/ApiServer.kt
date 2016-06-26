@@ -18,6 +18,8 @@ import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.StaticHandler
 import org.h2.jdbc.JdbcSQLException
 import java.net.ServerSocket
+import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.*
 
 class ApiServer : AbstractVerticle() {
@@ -100,6 +102,7 @@ class ApiServer : AbstractVerticle() {
             sendError(500, context.response())
         }
 
+        route("/api/pro_forma_liabilities").handler(handleProFormaRatings)
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
 
         // Serves static files out of the 'webroot' folder
@@ -133,6 +136,41 @@ class ApiServer : AbstractVerticle() {
     /**
      * Route handlers
      */
+    val handleProFormaRatings = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val query = """
+        SELECT
+          date(report_month, 'unixepoch') AS report_month,
+          sum(asset_value)                AS asset_value,
+          sum(liability_value)            AS liability_value
+        FROM entity_ratings
+        WHERE entity_id IN (
+          SELECT entity_id
+          FROM entity_ratings
+          WHERE report_month IN (SELECT max(report_month) latest_month
+                                 FROM entity_ratings))
+          AND report_month >= ?
+          AND report_month <= ?
+        GROUP BY report_month
+        ORDER BY report_month
+        """
+
+        val dateFormat = SimpleDateFormat("yyyy-mm-dd", Locale.CANADA)
+        val startDate = context.request().getParam("start_date")
+        val endDate = context.request().getParam("end_date")
+
+        val params = JsonArray()
+
+        params.add(dateFormat.parse(startDate).time / 1000)
+        params.add(dateFormat.parse(endDate).time / 1000)
+
+        db.queryWithParams(query, params) { query ->
+            if (query.failed())
+                context.fail(query.cause())
+            else
+                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+        }
+    }
 
     /**
      * One or more DDS files can be uploaded at a time. A company name must also be specified.
