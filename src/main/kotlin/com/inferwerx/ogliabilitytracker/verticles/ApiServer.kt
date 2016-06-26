@@ -102,6 +102,10 @@ class ApiServer : AbstractVerticle() {
             sendError(500, context.response())
         }
 
+        // Setup routes
+        route("/api/companies").handler(handleGetCompanies)
+        route("/api/provinces").handler(handleGetProvinces)
+        route("/api/historical_liabilities").handler(handleHistoricalRatings)
         route("/api/pro_forma_liabilities").handler(handleProFormaRatings)
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
 
@@ -136,37 +140,140 @@ class ApiServer : AbstractVerticle() {
     /**
      * Route handlers
      */
+
+    /**
+     * Responds with a list of all of the provinces that exist in the database
+     */
+    val handleGetProvinces = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val sql = "SELECT id, name, short_name FROM provinces ORDER BY name"
+
+        db.query(sql) { query ->
+            if (query.failed())
+                sendError(500, context.response(), query.cause())
+            else
+                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+        }
+    }
+
+    /**
+     * Responds with a list of all companies that are in the database
+     */
+    val handleGetCompanies = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val sql = "SELECT id, name, alt_name FROM companies ORDER BY name"
+
+        db.query(sql) { query ->
+            if (query.failed())
+                sendError(500, context.response(), query.cause())
+            else
+                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+        }
+    }
+
+    /**
+     * Returns the **pro forma** LLR ratings for a given province and company. In this context, pro forma means that
+     * only licences that are currently held by the selected company are included in the historical data. This is good
+     * for when you want to calculate asset value decline.
+     *
+     * Parameters:
+     * company_id - Integer ID of a company
+     * province_id - Integer ID of a province
+     * start_date - String representation of the earliest LLR rating to select (yyyy-mm-dd)
+     * end_date - String representation of the latest LLR rating to select (yyyy-mm-dd)
+     */
     val handleProFormaRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
         val query = """
         SELECT
-          date(report_month, 'unixepoch') AS report_month,
-          sum(asset_value)                AS asset_value,
-          sum(liability_value)            AS liability_value
-        FROM entity_ratings
-        WHERE entity_id IN (
+          date(r.report_month, 'unixepoch') AS report_month,
+          sum(r.asset_value)                AS asset_value,
+          sum(r.liability_value)            AS liability_value
+        FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
+        WHERE e.id IN (
           SELECT entity_id
           FROM entity_ratings
           WHERE report_month IN (SELECT max(report_month) latest_month
                                  FROM entity_ratings))
-          AND report_month >= ?
-          AND report_month <= ?
-        GROUP BY report_month
-        ORDER BY report_month
+              AND e.province_id = ?
+              AND e.company_id = ?
+              AND r.report_month >= ?
+              AND r.report_month <= ?
+        GROUP BY r.report_month
+        ORDER BY r.report_month
         """
 
-        val dateFormat = SimpleDateFormat("yyyy-mm-dd", Locale.CANADA)
-        val startDate = context.request().getParam("start_date")
-        val endDate = context.request().getParam("end_date")
+        // We could do all of this without creating so many variables, but this is helpful when debugging and probably
+        // gets optimized away during runtime anyway...
+        val province = context.request().getParam("province_id")
+        val company = context.request().getParam("company_id")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
+        val startDateStr = context.request().getParam("start_date")
+        val endDateStr = context.request().getParam("end_date")
+        val startDate = dateFormat.parse(startDateStr)
+        val endDate = dateFormat.parse(endDateStr)
 
         val params = JsonArray()
 
-        params.add(dateFormat.parse(startDate).time / 1000)
-        params.add(dateFormat.parse(endDate).time / 1000)
+        params.add(province.toInt())
+        params.add(company.toInt())
+        params.add(startDate.time / 1000)
+        params.add(endDate.time / 1000)
 
         db.queryWithParams(query, params) { query ->
             if (query.failed())
-                context.fail(query.cause())
+                sendError(500, context.response(), query.cause())
+            else
+                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+        }
+    }
+
+
+    /**
+     * Returns the ass-is historical LLR ratings for a given province and company.
+     *
+     * Parameters:
+     * company_id - Integer ID of a company
+     * province_id - Integer ID of a province
+     * start_date - String representation of the earliest LLR rating to select (yyyy-mm-dd)
+     * end_date - String representation of the latest LLR rating to select (yyyy-mm-dd)
+     */
+    val handleHistoricalRatings = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val query = """
+        SELECT
+          date(r.report_month, 'unixepoch') AS report_month,
+          sum(r.asset_value)                AS asset_value,
+          sum(r.liability_value)            AS liability_value
+        FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
+        WHERE e.province_id = ?
+              AND e.company_id = ?
+              AND r.report_month >= ?
+              AND r.report_month <= ?
+        GROUP BY r.report_month
+        ORDER BY r.report_month
+        """
+
+        // We could do all of this without creating so many variables, but this is helpful when debugging and probably
+        // gets optimized away during runtime anyway...
+        val province = context.request().getParam("province_id")
+        val company = context.request().getParam("company_id")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
+        val startDateStr = context.request().getParam("start_date")
+        val endDateStr = context.request().getParam("end_date")
+        val startDate = dateFormat.parse(startDateStr)
+        val endDate = dateFormat.parse(endDateStr)
+
+        val params = JsonArray()
+
+        params.add(province.toInt())
+        params.add(company.toInt())
+        params.add(startDate.time / 1000)
+        params.add(endDate.time / 1000)
+
+        db.queryWithParams(query, params) { query ->
+            if (query.failed())
+                sendError(500, context.response(), query.cause())
             else
                 context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
         }
@@ -197,8 +304,8 @@ class ApiServer : AbstractVerticle() {
 
         message.put("uploadedFiles", uploadedFiles)
 
-        // Send message to the importer worker with a 10 minute timeout
-        eb.send<String>("og-liability-tracker.ab_importer", message.encode(), DeliveryOptions().setSendTimeout(600000)) { reply ->
+        // Send message to the importer worker with a 2 minute timeout
+        eb.send<String>("og-liability-tracker.ab_importer", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
             if (reply.succeeded())
                 context.response().endWithJson(JsonObject(reply.result().body()))
             else
