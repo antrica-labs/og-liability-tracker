@@ -1,9 +1,9 @@
 package com.inferwerx.ogliabilitytracker
 
 import com.inferwerx.ogliabilitytracker.exceptions.MultiAsyncException
-import com.inferwerx.ogliabilitytracker.verticles.AlbertaLiabilityImporter
+import com.inferwerx.ogliabilitytracker.verticles.workers.AlbertaLiabilityImporter
 import com.inferwerx.ogliabilitytracker.verticles.ApiServer
-import com.inferwerx.ogliabilitytracker.verticles.DatabaseScriptRunner
+import com.inferwerx.ogliabilitytracker.verticles.workers.DatabaseScriptRunner
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.CompositeFuture
 import io.vertx.core.DeploymentOptions

@@ -1,4 +1,4 @@
-package com.inferwerx.ogliabilitytracker.verticles
+package com.inferwerx.ogliabilitytracker.verticles.workers
 
 import com.inferwerx.ogliabilitytracker.alberta.AbLiability
 import io.vertx.core.AbstractVerticle
