@@ -17,7 +17,9 @@ import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.StaticHandler
 import org.h2.jdbc.JdbcSQLException
+import java.io.File
 import java.net.ServerSocket
+import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
@@ -310,6 +312,14 @@ class ApiServer : AbstractVerticle() {
                 context.response().endWithJson(JsonObject(reply.result().body()))
             else
                 context.response().endWithJson(JsonObject().put("status", "failed").put("message", reply.cause().toString()))
+
+            context.fileUploads().forEach {
+                try {
+                    Files.delete(File(it.uploadedFileName()).toPath())
+                } catch (t : Throwable) {
+                    System.err.println(t.message)
+                }
+            }
         }
     }
 
