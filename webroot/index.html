@@ -8,17 +8,35 @@
         <title>Liability Management</title>
     </head>
     <body>
-        <h1>Upload DDS Files</h1>
+        <fieldset>
+            <legend>Upload DDS Files</legend>
 
-        <form action="/api/upload_ab_liabilities" method="post" enctype="multipart/form-data">
-            <ul>
-                <li><label for="txt_province_id">Province:</label> <input type="text" id="txt_province_id" name="province_id" /></li>
-                <li><label for="txt_company_id">Company:</label> <input type="text" id="txt_company_id" name="company_id" /></li>
-                <li><label for="chbx_append">Append data:</label> <input type="checkbox" id="chbx_append" name="append" /></li>
-                <li><label for="file_uploads">Files:</label> <input type="file" id="file_uploads" name="files" multiple="multiple" /></li>
-            </ul>
+            <form action="/api/upload_ab_liabilities" method="post" enctype="multipart/form-data">
+                <ul>
+                    <li><label for="txt_province_id">Province:</label> <input type="text" id="txt_province_id" name="province_id" /></li>
+                    <li><label for="txt_company_id">Company:</label> <input type="text" id="txt_company_id" name="company_id" /></li>
+                    <li><label for="chbx_append">Append data:</label> <input type="checkbox" id="chbx_append" name="append" /></li>
+                    <li><label for="file_uploads">Files:</label> <input type="file" id="file_uploads" name="files" multiple="multiple" /></li>
+                </ul>
 
-            <button type="submit">Submit</button>
-        </form>
+                <button type="submit">Submit</button>
+            </form>
+        </fieldset>
+
+        <br />
+
+        <fieldset>
+            <legend>Upload Hierarchy Mapping</legend>
+
+            <form action="/api/upload_hierarchy_mapping" method="post" enctype="multipart/form-data">
+                <ul>
+                    <li><label for="file_mapping">File:</label> <input type="file" id="file_mapping" name="file_mapping" /></li>
+                </ul>
+
+                <button type="submit">Submit</button>
+            </form>
+        </fieldset>
+
+
     </body>
 </html>

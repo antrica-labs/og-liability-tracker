@@ -19,7 +19,7 @@ class HierarchyImporter : AbstractVerticle() {
                 future.complete(importCount)
             }, {
                 if (it.succeeded())
-                    message.reply(JsonObject().put("record_count", it.result()).encode())
+                    message.reply(JsonObject().put("message", "Saved ${it.result()} mappings").put("record_count", it.result()).encode())
                 else
                     message.fail(1, it.cause().toString())
             })
@@ -44,6 +44,10 @@ class HierarchyImporter : AbstractVerticle() {
             val preparedStatement = connection.prepareStatement("INSERT INTO hierarchy_lookup (type, licence, hierarchy_value) VALUES (?, ?, ?)")
 
             for (record in parser) {
+                // skip the header row
+                if (record.get(ImportHeaders.Type) == "Type" && record.get(ImportHeaders.Licence) == "Licence" && record.get(ImportHeaders.HierarchyElement) == "HierarchyElement")
+                    continue
+
                 preparedStatement.setString(1, record.get(ImportHeaders.Type))
                 preparedStatement.setString(2, record.get(ImportHeaders.Licence))
                 preparedStatement.setString(3, record.get(ImportHeaders.HierarchyElement))

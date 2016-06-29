@@ -27,7 +27,7 @@ class DatabaseScriptRunner : AbstractVerticle() {
                 Class.forName(config().getString("db.jdbc_driver"))
 
                 var connection : Connection? = null
-                var statement : Statement? = null
+                val statement : Statement?
 
                 try {
                     connection = DriverManager.getConnection("${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}", config().getString("db.username"), config().getString("db.password"))

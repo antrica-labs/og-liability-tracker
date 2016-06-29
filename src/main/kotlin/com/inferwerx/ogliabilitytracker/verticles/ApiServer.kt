@@ -110,6 +110,7 @@ class ApiServer : AbstractVerticle() {
         route("/api/historical_liabilities").handler(handleHistoricalRatings)
         route("/api/pro_forma_liabilities").handler(handleProFormaRatings)
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
+        route("/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -323,6 +324,43 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+    /**
+     * Handles the upload of a hierarchy mapping file, formatted like /webroot/
+     */
+    val handleHierarchyMappingUpload = Handler<RoutingContext> { context ->
+        val eb = context.get<EventBus>("eventbus")
+        val future = Future.future<Void>()
+
+        if (context.fileUploads().count() > 0) {
+            val upload = context.fileUploads().toTypedArray()[0]
+            val message = JsonObject().put("filename", upload.uploadedFileName())
+
+            eb.send<String>("og-liability-tracker.hierarchy_importer", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                if (reply.succeeded()) {
+                    context.response().endWithJson(JsonObject(reply.result().body()))
+
+                    future.complete()
+                } else {
+                    context.response().endWithJson(JsonObject().put("status", "failed").put("message", reply.cause().toString()))
+
+                    future.complete()
+                }
+            }
+        } else {
+            future.complete()
+        }
+
+
+        future.setHandler {
+            context.fileUploads().forEach {
+                try {
+                    Files.delete(File(it.uploadedFileName()).toPath())
+                } catch (t : Throwable) {
+                    System.err.println(t.message)
+                }
+            }
+        }
+    }
     /**
      * An extension added to HttpServerResponse class that makes responding with JSON a little less verbose
      */
