@@ -34,7 +34,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             val company = job.getInteger("company")
             val append = job.getBoolean("append")
 
-            vertx.executeBlocking<String>({ future ->
+            vertx.executeBlocking<Int>({ future ->
                 val liabilities = LinkedList<AbLiability>()
 
                 try {
@@ -47,13 +47,13 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
 
                     val rows = persistLiabilities(company, append, liabilities);
 
-                    future.complete("Saved ${rows} rating records")
+                    future.complete(rows)
                 } catch (t : Throwable) {
                     future.fail(t)
                 }
             }, {
                 if (it.succeeded())
-                    message.reply(JsonObject().put("message", it.result()).encode())
+                    message.reply(JsonObject().put("message", "Saved ${it.result()} rating records").put("record_count", it.result()).encode())
                 else
                     message.fail(1, it.cause().toString())
             })
