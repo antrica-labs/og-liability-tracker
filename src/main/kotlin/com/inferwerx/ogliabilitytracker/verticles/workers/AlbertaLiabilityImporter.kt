@@ -237,7 +237,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             val rs = statement.executeQuery()
 
             while (rs.next()) {
-                dictionary.put("${rs.getString(2)}${rs.getString(3)}", rs.getInt(1))
+                dictionary.put("${rs.getString(2)}${rs.getInt(3)}", rs.getInt(1))
             }
         } finally {
             statement?.close()
@@ -296,7 +296,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                     entityStatement.setInt(1, provinceId)
                     entityStatement.setInt(2, companyId)
                     entityStatement.setString(3, item.type)
-                    entityStatement.setString(4, item.licence)
+                    entityStatement.setInt(4, item.licence.toInt())
                     entityStatement.setString(5, item.location)
 
                     entityStatement.addBatch()
@@ -311,7 +311,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             entityLookup = getExistingEntities(connection, provinceId, companyId)
 
             for (item in liabilities) {
-                val pk = entityLookup.get("${item.type}${item.licence}") ?: throw Exception("Unable to get an entity match on one or more ratings")
+                val pk = entityLookup.get("${item.type}${item.licence.toInt()}") ?: throw Exception("Unable to get an entity match on one or more ratings")
 
                 liabilityStatement.setInt(1, pk)
                 liabilityStatement.setLong(2, item.month.toEpochMilli() / 1000)

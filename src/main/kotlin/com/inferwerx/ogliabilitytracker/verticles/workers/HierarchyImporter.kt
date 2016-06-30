@@ -14,7 +14,7 @@ class HierarchyImporter : AbstractVerticle() {
             val job = JsonObject(message.body())
 
             vertx.executeBlocking<Int>({ future ->
-                val importCount = importFile(job.getString("filename"))
+                val importCount = importFile(job.getInteger("company"), job.getString("filename"))
 
                 future.complete(importCount)
             }, {
@@ -29,7 +29,7 @@ class HierarchyImporter : AbstractVerticle() {
     /**
      * Takes a CSV file in the format shown in webroot/resources/sample-hierarchy-update.csv and saves it to the database
      */
-    private fun importFile(filename : String) : Int {
+    private fun importFile(companyId : Int, filename : String) : Int {
         Class.forName(config().getString("db.jdbc_driver"))
 
         var recordsPersisted = 0
@@ -41,16 +41,17 @@ class HierarchyImporter : AbstractVerticle() {
             parser = CSVFormat.EXCEL.withHeader(ImportHeaders::class.java).parse(FileReader(filename))
 
             val statement = connection.createStatement()
-            val preparedStatement = connection.prepareStatement("INSERT INTO hierarchy_lookup (type, licence, hierarchy_value) VALUES (?, ?, ?)")
+            val preparedStatement = connection.prepareStatement("INSERT INTO hierarchy_lookup (company_id, type, licence, hierarchy_value) VALUES (?, ?, ?, ?)")
 
             for (record in parser) {
                 // skip the header row
                 if (record.get(ImportHeaders.Type) == "Type" && record.get(ImportHeaders.Licence) == "Licence" && record.get(ImportHeaders.HierarchyElement) == "HierarchyElement")
                     continue
 
-                preparedStatement.setString(1, record.get(ImportHeaders.Type))
-                preparedStatement.setString(2, record.get(ImportHeaders.Licence))
-                preparedStatement.setString(3, record.get(ImportHeaders.HierarchyElement))
+                preparedStatement.setInt(1, companyId)
+                preparedStatement.setString(2, record.get(ImportHeaders.Type))
+                preparedStatement.setInt(3, record.get(ImportHeaders.Licence).toInt())
+                preparedStatement.setString(4, record.get(ImportHeaders.HierarchyElement))
 
                 preparedStatement.addBatch()
             }

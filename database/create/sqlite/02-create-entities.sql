@@ -3,6 +3,6 @@ CREATE TABLE entities (
   company_id INTEGER,
   province_id INTEGER,
   type VARCHAR(255),
-  licence VARCHAR(255),
+  licence INTEGER,
   location_identifier VARCHAR(255)
 )
