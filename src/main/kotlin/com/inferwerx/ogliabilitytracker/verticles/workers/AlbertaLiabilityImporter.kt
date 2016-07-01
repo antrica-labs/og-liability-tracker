@@ -292,7 +292,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             liabilityStatement = connection.prepareStatement(insertLiabilitySql)
 
             for (item in liabilities) {
-                if (!entityLookup.contains("${item.type}${item.licence}")) {
+                if (!entityLookup.contains("${item.type}${item.licence.toInt()}")) {
                     entityStatement.setInt(1, provinceId)
                     entityStatement.setInt(2, companyId)
                     entityStatement.setString(3, item.type)
@@ -300,6 +300,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                     entityStatement.setString(5, item.location)
 
                     entityStatement.addBatch()
+                    entityLookup.put("${item.type}${item.licence.toInt()}", -1)
                 }
             }
 
