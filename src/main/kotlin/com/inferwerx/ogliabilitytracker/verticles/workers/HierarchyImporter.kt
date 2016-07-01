@@ -56,7 +56,8 @@ class HierarchyImporter : AbstractVerticle() {
                 preparedStatement.addBatch()
             }
 
-            statement.executeUpdate("DELETE FROM hierarchy_lookup")
+            statement.executeUpdate("DELETE FROM hierarchy_lookup WHERE company_id = $companyId")
+
 
             recordsPersisted = preparedStatement.executeBatch().size
 
