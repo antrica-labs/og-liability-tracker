@@ -23,6 +23,7 @@ import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
+import javax.print.attribute.HashDocAttributeSet
 
 class ApiServer : AbstractVerticle() {
     override fun start(startFuture : Future<Void>) {
@@ -58,10 +59,10 @@ class ApiServer : AbstractVerticle() {
      * starting. Highly unlikely, but possible.
      */
     private fun getRandomizedPort() : Int {
-        val socket = ServerSocket(0);
+        val socket = ServerSocket(0)
 
         val port = socket.localPort
-        socket.close();
+        socket.close()
 
         return port
     }
@@ -109,6 +110,8 @@ class ApiServer : AbstractVerticle() {
         route("/api/provinces").handler(handleGetProvinces)
         route("/api/historical_liabilities").handler(handleHistoricalRatings)
         route("/api/pro_forma_liabilities").handler(handleProFormaRatings)
+        route("/api/get_report_months").handler(handleReportMonths)
+        route("/api/liability_details_by_month").handler(handleLiabilityDetails)
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route("/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
 
@@ -273,6 +276,82 @@ class ApiServer : AbstractVerticle() {
         params.add(company.toInt())
         params.add(startDate.time / 1000)
         params.add(endDate.time / 1000)
+
+        db.queryWithParams(query, params) { query ->
+            if (query.failed())
+                sendError(500, context.response(), query.cause())
+            else
+                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+        }
+    }
+
+    val handleReportMonths = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val query = """
+        SELECT DISTINCT date(report_month, 'unixepoch') AS report_month
+        FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
+        WHERE e.province_id = ? AND e.company_id = ?
+        ORDER BY report_month
+        """
+
+        val province = context.request().getParam("province_id")
+        val company = context.request().getParam("company_id")
+
+        val params = JsonArray()
+
+        params.add(province)
+        params.add(company)
+
+        db.queryWithParams(query, params) { query ->
+            if (query.failed())
+                sendError(500, context.response(), query.cause())
+            else
+                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+        }
+    }
+
+
+
+    val handleLiabilityDetails = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val query = """
+        SELECT
+          e.type,
+          e.licence,
+          e.location_identifier,
+          h.hierarchy_value,
+          date(r.report_month, 'unixepoch') AS report_month,
+          r.entity_status,
+          r.calculation_type,
+          r.pvs_value_type,
+          r.asset_value,
+          r.liability_value,
+          r.abandonment_basic,
+          r.abandonment_additional_event,
+          r.abandonment_gwp,
+          r.abandonment_gas_migration,
+          r.abandonment_vent_flow,
+          r.abandonment_site_specific,
+          r.reclamation_basic,
+          r.reclamation_site_specific
+        FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
+          LEFT OUTER JOIN hierarchy_lookup h ON h.type = e.type AND h.licence = e.licence AND h.company_id = e.company_id
+        WHERE r.report_month = ?
+              AND e.province_id = ?
+              AND e.company_id = ?
+        ORDER BY h.hierarchy_value, e.licence
+        """
+
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
+        val province = context.request().getParam("province_id")
+        val company = context.request().getParam("company_id")
+        val reportMonth = dateFormat.parse(context.request().getParam("report_date"))
+
+        val params = JsonArray()
+
+        params.add(reportMonth.time / 1000)
+        params.add(province.toInt())
+        params.add(company.toInt())
 
         db.queryWithParams(query, params) { query ->
             if (query.failed())
