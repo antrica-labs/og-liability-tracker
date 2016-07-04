@@ -14,9 +14,13 @@ class HierarchyImporter : AbstractVerticle() {
             val job = JsonObject(message.body())
 
             vertx.executeBlocking<Int>({ future ->
-                val importCount = importFile(job.getInteger("company"), job.getString("filename"))
+                try {
+                    val importCount = importFile(job.getInteger("company"), job.getString("filename"))
 
-                future.complete(importCount)
+                    future.complete(importCount)
+                } catch (t : Throwable) {
+                    future.fail(t)
+                }
             }, {
                 if (it.succeeded())
                     message.reply(JsonObject().put("message", "Saved ${it.result()} mappings").put("record_count", it.result()).encode())
@@ -56,10 +60,13 @@ class HierarchyImporter : AbstractVerticle() {
                 preparedStatement.addBatch()
             }
 
+            connection.autoCommit = false
+
             statement.executeUpdate("DELETE FROM hierarchy_lookup WHERE company_id = $companyId")
 
-
             recordsPersisted = preparedStatement.executeBatch().size
+
+            connection.commit()
 
             statement.close()
             preparedStatement.close()
@@ -70,6 +77,8 @@ class HierarchyImporter : AbstractVerticle() {
         } catch (t : Throwable) {
             connection?.close()
             parser?.close()
+
+            throw t
         }
 
         return recordsPersisted

@@ -425,7 +425,8 @@ class ApiServer : AbstractVerticle() {
 
         if (context.fileUploads().count() > 0) {
             val upload = context.fileUploads().toTypedArray()[0]
-            val message = JsonObject().put("filename", upload.uploadedFileName())
+            val company = context.request().getParam("company_id")
+            val message = JsonObject().put("company", company.toInt()).put("filename", upload.uploadedFileName())
 
             eb.send<String>("og-liability-tracker.hierarchy_importer", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                 if (reply.succeeded()) {
