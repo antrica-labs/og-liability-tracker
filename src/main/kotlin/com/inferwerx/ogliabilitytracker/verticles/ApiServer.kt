@@ -52,22 +52,6 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * When deploying as an electron application it's impossible to know what ports will be available for the API server
-     * so this function can be used to select a random port.
-     *
-     * Note: It is possible that a port could be taken in the time between this function returning and the API server
-     * starting. Highly unlikely, but possible.
-     */
-    private fun getRandomizedPort() : Int {
-        val socket = ServerSocket(0)
-
-        val port = socket.localPort
-        socket.close()
-
-        return port
-    }
-
-    /**
      * This is where the API routes are setup. This function gets called when the verticle starts.
      */
     private fun createRoutes(dbClient : JDBCClient, eventBus : EventBus) = Router.router(vertx).apply {
@@ -108,10 +92,12 @@ class ApiServer : AbstractVerticle() {
         // Setup routes
         route("/api/companies").handler(handleGetCompanies)
         route("/api/provinces").handler(handleGetProvinces)
-        route("/api/historical_liabilities").handler(handleHistoricalRatings)
-        route("/api/pro_forma_liabilities").handler(handleProFormaRatings)
-        route("/api/get_report_months").handler(handleReportMonths)
-        route("/api/liability_details_by_month").handler(handleLiabilityDetails)
+        route("/api/historical_lmr").handler(handleHistoricalRatings)
+        route("/api/pro_forma_lmr").handler(handleProFormaRatings)
+        route("/api/forecasted_lmr").handler(handleForecastLiabilities)
+        route("/api/reported_months").handler(handleReportMonths)
+        route("/api/historical_netbacks").handler(handleHistoricalNetbacks)
+        route("/api/lmr_details").handler(handleLiabilityDetails)
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route("/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
 
@@ -285,13 +271,17 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+
+    /**
+     * Returns a list of all months that have liability data
+     */
     val handleReportMonths = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
         val query = """
         SELECT DISTINCT date(report_month, 'unixepoch') AS report_month
         FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
         WHERE e.province_id = ? AND e.company_id = ?
-        ORDER BY report_month
+        ORDER BY report_month DESC
         """
 
         val province = context.request().getParam("province_id")
@@ -299,8 +289,8 @@ class ApiServer : AbstractVerticle() {
 
         val params = JsonArray()
 
-        params.add(province)
-        params.add(company)
+        params.add(province.toInt())
+        params.add(company.toInt())
 
         db.queryWithParams(query, params) { query ->
             if (query.failed())
@@ -310,8 +300,31 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+    /**
+     * Gets the netbacks that used historically by province. This is useful for trying to back
+     * calculate volumes from asset value
+     */
+    val handleHistoricalNetbacks = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val query = "SELECT effective_date, netback FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
 
+        val province = context.request().getParam("province_id")
 
+        val params = JsonArray()
+
+        params.add(province.toInt())
+
+        db.queryWithParams(query, params) { query ->
+            if (query.failed())
+                sendError(500, context.response(), query.cause())
+            else
+                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+        }
+    }
+
+    /**
+     * Gets the liability details for a month
+     */
     val handleLiabilityDetails = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
         val query = """
@@ -440,6 +453,93 @@ class ApiServer : AbstractVerticle() {
             }
         }
     }
+
+    val handleForecastLiabilities = Handler<RoutingContext> { context ->
+        val eb = context.get<EventBus>("eventbus")
+        val db = context.get<SQLConnection>("dbconnection")
+
+        val netbackQuery = "SELECT effective_date, netback FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
+        val ratingsQuery = """
+            SELECT
+              date(r.report_month, 'unixepoch') AS report_month,
+              sum(r.asset_value)                AS asset_value,
+              sum(r.liability_value)            AS liability_value
+            FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
+            WHERE e.id IN (
+              SELECT entity_id
+              FROM entity_ratings
+              WHERE report_month IN (SELECT max(report_month) latest_month
+                                     FROM entity_ratings))
+                  AND e.province_id = ?
+                  AND e.company_id = ?
+                  AND r.report_month >= ?
+                  AND r.report_month <= ?
+            GROUP BY r.report_month
+            ORDER BY r.report_month
+        """
+
+        val province = context.request().getParam("province_id")
+        val company = context.request().getParam("company_id")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
+        val startDateStr = context.request().getParam("start_date")
+        val endDateStr = context.request().getParam("end_date")
+        val startDate = dateFormat.parse(startDateStr ?: "1970-01-01")
+        val endDate = dateFormat.parse(endDateStr ?: "2999-12-31")
+
+        val netbackParams = JsonArray()
+        netbackParams.add(company.toInt())
+
+        val lmrParams = JsonArray()
+        lmrParams.add(province.toInt())
+        lmrParams.add(company.toInt())
+        lmrParams.add(startDate.time / 1000)
+        lmrParams.add(endDate.time / 1000)
+
+        try {
+            db.queryWithParams(netbackQuery, netbackParams) { netback ->
+                if (netback.failed())
+                    throw Throwable(netback.cause())
+
+                val message = JsonObject()
+
+                message.put("netbacks", netback.result().toJson().getJsonArray("rows"))
+
+                db.queryWithParams(ratingsQuery, lmrParams) { lmr ->
+                    if (lmr.failed())
+                        throw Throwable(lmr.cause())
+
+                    message.put("historical", lmr.result().toJson().getJsonArray("rows"))
+
+                    eb.send<String>("og-liability-tracker.forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                        if (reply.succeeded()) {
+                            context.response().endWithJson(JsonObject(reply.result().body()))
+                        } else {
+                            throw reply.cause()
+                        }
+                    }
+                }
+            }
+        } catch (t : Throwable) {
+            sendError(500, context.response(), t)
+        }
+    }
+
+    /**
+     * When deploying as an electron application it's impossible to know what ports will be available for the API server
+     * so this function can be used to select a random port.
+     *
+     * Note: It is possible that a port could be taken in the time between this function returning and the API server
+     * starting. Highly unlikely, but possible.
+     */
+    private fun getRandomizedPort() : Int {
+        val socket = ServerSocket(0)
+
+        val port = socket.localPort
+        socket.close()
+
+        return port
+    }
+
     /**
      * An extension added to HttpServerResponse class that makes responding with JSON a little less verbose
      */

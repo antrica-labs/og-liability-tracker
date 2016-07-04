@@ -1,1 +1,0 @@
-INSERT INTO provinces (name, short_name) VALUES ('British Columbia', 'BC')
