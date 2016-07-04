@@ -21,9 +21,7 @@ import java.io.File
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.text.SimpleDateFormat
-import java.time.Instant
 import java.util.*
-import javax.print.attribute.HashDocAttributeSet
 
 class ApiServer : AbstractVerticle() {
     override fun start(startFuture : Future<Void>) {
@@ -95,7 +93,7 @@ class ApiServer : AbstractVerticle() {
         route("/api/historical_lmr").handler(handleHistoricalRatings)
         route("/api/pro_forma_lmr").handler(handleProFormaRatings)
         route("/api/forecasted_lmr").handler(handleForecastLiabilities)
-        route("/api/reported_months").handler(handleReportMonths)
+        route("/api/report_dates").handler(handleReportDates)
         route("/api/historical_netbacks").handler(handleHistoricalNetbacks)
         route("/api/lmr_details").handler(handleLiabilityDetails)
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
@@ -108,6 +106,29 @@ class ApiServer : AbstractVerticle() {
         get("/").handler { context ->
             context.response().setStatusCode(302).putHeader(HttpHeaders.LOCATION, "/pub/").end()
         }
+    }
+
+    /**
+     * An extension added to HttpServerResponse class that makes responding with JSON a little less verbose
+     */
+    fun HttpServerResponse.endWithJson(obj: Any) {
+        this.putHeader(HttpHeaders.CONTENT_TYPE, "application/json").end(Json.encode(obj))
+    }
+
+    /**
+     * When deploying as an electron application it's impossible to know what ports will be available for the API server
+     * so this function can be used to select a random port.
+     *
+     * Note: It is possible that a port could be taken in the time between this function returning and the API server
+     * starting. Highly unlikely, but possible.
+     */
+    private fun getRandomizedPort() : Int {
+        val socket = ServerSocket(0)
+
+        val port = socket.localPort
+        socket.close()
+
+        return port
     }
 
     /**
@@ -128,10 +149,6 @@ class ApiServer : AbstractVerticle() {
 
         response.endWithJson(message)
     }
-
-    /**
-     * Route handlers
-     */
 
     /**
      * Responds with a list of all of the provinces that exist in the database
@@ -220,7 +237,6 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
-
     /**
      * Returns the ass-is historical LLR ratings for a given province and company.
      *
@@ -271,14 +287,17 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
-
     /**
      * Returns a list of all months that have liability data
+     *
+     * Parameters:
+     * company_id - Integer ID of a company
+     * province_id - Integer ID of a province
      */
-    val handleReportMonths = Handler<RoutingContext> { context ->
+    val handleReportDates = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
         val query = """
-        SELECT DISTINCT date(report_month, 'unixepoch') AS report_month
+        SELECT DISTINCT date(report_month, 'unixepoch') AS report_date
         FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
         WHERE e.province_id = ? AND e.company_id = ?
         ORDER BY report_month DESC
@@ -303,10 +322,13 @@ class ApiServer : AbstractVerticle() {
     /**
      * Gets the netbacks that used historically by province. This is useful for trying to back
      * calculate volumes from asset value
+     *
+     * Parameters:
+     * province_id - Integer ID of a province
      */
     val handleHistoricalNetbacks = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val query = "SELECT effective_date, netback FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
+        val query = "SELECT effective_date, netback, shrinkage_factor, oil_equivalent_conversion FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
 
         val province = context.request().getParam("province_id")
 
@@ -323,7 +345,13 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Gets the liability details for a month
+     * Gets the liability details for a specified report date. In order to know what report dates are available, you
+     * may make a call to /api/report_dates.
+     *
+     * Parameters:
+     * company_id - Integer ID of a company
+     * province_id - Integer ID of a province
+     * report_date - String representation of the report date that details are requested for (yyyy-mm-dd)
      */
     val handleLiabilityDetails = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
@@ -375,7 +403,13 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * One or more DDS files can be uploaded at a time. A company name must also be specified.
+     * One or more DDS files can be uploaded at a time to a company. This call is for uploading Alberta LLR only.
+     *
+     * Parameters (in addition to uploaded files):
+     * company_id - Integer ID of a company
+     * append - If 'on' then LLR data will be appended to any exiting data, otherwise all LLR data for the company
+     *          will be cleared before importing the new data. This is handy for when you want to re-upload everything,
+     *          or when just add additional months as they become available.
      */
     val handleAbLiabilityUpload = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
@@ -417,7 +451,10 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Handles the upload of a hierarchy mapping file, formatted like /webroot/
+     * Handles the upload of a hierarchy mapping file, formatted like /webroot/resources/sample-hierarchy-update.csv
+     *
+     * Parameters (in addition to uploaded files):
+     * company_id - Integer ID of a company
      */
     val handleHierarchyMappingUpload = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
@@ -455,6 +492,17 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+    /**
+     * Forecasts LMR ratings in the future using historical LMR ratings. The forecasts starts one month after the specified
+     * end_date. If no end_date is specified, then the forecast will start one month after the last month that an LMR
+     * report exists.
+     *
+     * Parameters:
+     * company_id - Integer ID of a company
+     * province_id - Integer ID of a province
+     * start_date (Optional) - String representation of the earliest LLR rating to select (yyyy-mm-dd)
+     * end_date (Optional) - String representation of the last LLR rating to select (yyyy-mm-dd)
+     */
     val handleForecastLiabilities = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
         val db = context.get<SQLConnection>("dbconnection")
@@ -509,7 +557,7 @@ class ApiServer : AbstractVerticle() {
                     if (lmr.failed())
                         throw Throwable(lmr.cause())
 
-                    message.put("historical", lmr.result().toJson().getJsonArray("rows"))
+                    message.put("historical_lmr", lmr.result().toJson().getJsonArray("rows"))
 
                     eb.send<String>("og-liability-tracker.forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                         if (reply.succeeded()) {
@@ -523,28 +571,5 @@ class ApiServer : AbstractVerticle() {
         } catch (t : Throwable) {
             sendError(500, context.response(), t)
         }
-    }
-
-    /**
-     * When deploying as an electron application it's impossible to know what ports will be available for the API server
-     * so this function can be used to select a random port.
-     *
-     * Note: It is possible that a port could be taken in the time between this function returning and the API server
-     * starting. Highly unlikely, but possible.
-     */
-    private fun getRandomizedPort() : Int {
-        val socket = ServerSocket(0)
-
-        val port = socket.localPort
-        socket.close()
-
-        return port
-    }
-
-    /**
-     * An extension added to HttpServerResponse class that makes responding with JSON a little less verbose
-     */
-    fun HttpServerResponse.endWithJson(obj: Any) {
-        this.putHeader(HttpHeaders.CONTENT_TYPE, "application/json").end(Json.encode(obj))
     }
 }
