@@ -98,6 +98,7 @@ class ApiServer : AbstractVerticle() {
         route("/api/lmr_details").handler(handleLiabilityDetails)
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route("/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
+        route("/api/export_liabilities").handler(handleExportLiabilities)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -570,6 +571,52 @@ class ApiServer : AbstractVerticle() {
             }
         } catch (t : Throwable) {
             sendError(500, context.response(), t)
+        }
+    }
+
+    /**
+     * Exports liability details to a suplied JXLS template
+     *
+     * Parameters (in addition to file upload):
+     */
+    val handleExportLiabilities = Handler<RoutingContext> { context ->
+        val eb = context.get<EventBus>("eventbus")
+        val future = Future.future<String>()
+
+        if (context.fileUploads().count() > 0) {
+            val upload = context.fileUploads().toTypedArray()[0]
+            val company = context.request().getParam("company_id")
+            val province = context.request().getParam("province_id")
+            val message = JsonObject().put("province", province.toInt()).put("company", company.toInt()).put("filename", upload.uploadedFileName())
+
+            eb.send<String>("og-liability-tracker.liability_exporter", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                if (reply.succeeded()) {
+                    future.complete(reply.result().body())
+                } else {
+                    future.fail(reply.cause())
+                }
+            }
+        } else {
+            future.complete()
+        }
+
+
+        future.setHandler {
+            context.fileUploads().forEach {
+                try {
+                    Files.delete(File(it.uploadedFileName()).toPath())
+                } catch (t : Throwable) {
+                    System.err.println(t.message)
+                }
+            }
+
+            if (it.failed()) {
+                sendError(500, context.response(), Throwable(it.cause()))
+            } else {
+                val exportFile = it.result()
+
+                context.response().sendFile(exportFile)
+            }
         }
     }
 }
