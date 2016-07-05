@@ -575,9 +575,12 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Exports liability details to a suplied JXLS template
+     * Exports liability details to a supplied JXLS template
      *
      * Parameters (in addition to file upload):
+     * company_id - Integer ID of a company
+     * province_id - Integer ID of a province
+     * report_date - String representation of the report date that details are requested for (yyyy-mm-dd)
      */
     val handleExportLiabilities = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
@@ -587,7 +590,8 @@ class ApiServer : AbstractVerticle() {
             val upload = context.fileUploads().toTypedArray()[0]
             val company = context.request().getParam("company_id")
             val province = context.request().getParam("province_id")
-            val message = JsonObject().put("province", province.toInt()).put("company", company.toInt()).put("filename", upload.uploadedFileName())
+            val reportDateStr = context.request().getParam("report_date")
+            val message = JsonObject().put("province", province.toInt()).put("company", company.toInt()).put("report_date", reportDateStr).put("filename", upload.uploadedFileName())
 
             eb.send<String>("og-liability-tracker.liability_exporter", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                 if (reply.succeeded()) {

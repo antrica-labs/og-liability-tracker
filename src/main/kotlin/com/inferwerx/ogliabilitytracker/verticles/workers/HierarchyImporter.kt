@@ -36,7 +36,7 @@ class HierarchyImporter : AbstractVerticle() {
     private fun importFile(companyId : Int, filename : String) : Int {
         Class.forName(config().getString("db.jdbc_driver"))
 
-        var recordsPersisted = 0
+        val recordsPersisted : Int
         var connection : Connection? = null
         var parser : CSVParser? = null
 
