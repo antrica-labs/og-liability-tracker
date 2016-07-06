@@ -13,10 +13,10 @@
 
             <form action="/api/upload_ab_liabilities" method="post" enctype="multipart/form-data">
                 <ul>
-                    <li><label for="txt_province_id">Province:</label> <input type="text" id="txt_province_id" name="province_id" /></li>
-                    <li><label for="txt_company_id">Company:</label> <input type="text" id="txt_company_id" name="company_id" /></li>
-                    <li><label for="chbx_append">Append data:</label> <input type="checkbox" id="chbx_append" name="append" /></li>
-                    <li><label for="file_uploads">Files:</label> <input type="file" id="file_uploads" name="files" multiple="multiple" /></li>
+                    <li><label for="txt_lib_province_id">Province:</label> <input type="text" id="txt_lib_province_id" name="province_id" value="1" /></li>
+                    <li><label for="txt_lib_company_id">Company:</label> <input type="text" id="txt_lib_company_id" name="company_id" value="1" /></li>
+                    <li><label for="chbx_lib_append">Append data:</label> <input type="checkbox" id="chbx_lib_append" name="append" /></li>
+                    <li><label for="file_lib_uploads">Files:</label> <input type="file" id="file_lib_uploads" name="files" multiple="multiple" /></li>
                 </ul>
 
                 <button type="submit">Submit</button>
@@ -30,14 +30,30 @@
 
             <form action="/api/upload_hierarchy_mapping" method="post" enctype="multipart/form-data">
                 <ul>
-                    <li><label for="txt_hier_company_id">Company:</label> <input type="text" id="txt_hier_company_id" name="company_id" /></li>
-                    <li><label for="file_mapping">File:</label> <input type="file" id="file_mapping" name="file_mapping" /></li>
+                    <li><label for="txt_hier_company_id">Company:</label> <input type="text" id="txt_hier_company_id" name="company_id" value="1" /></li>
+                    <li><label for="file_hier_upload">File:</label> <input type="file" id="file_hier_upload" name="file_mapping" /></li>
                 </ul>
 
                 <button type="submit">Submit</button>
             </form>
         </fieldset>
 
+        <br />
+
+        <fieldset>
+            <legend>Export monthly report</legend>
+
+            <form action="/api/export_liabilities" method="post" enctype="multipart/form-data">
+                <ul>
+                    <li><label for="txt_exp_province_id">Province:</label> <input type="text" id="txt_exp_province_id" name="province_id" value="1" /></li>
+                    <li><label for="txt_exp_company_id">Company:</label> <input type="text" id="txt_exp_company_id" name="company_id" value="1" /></li>
+                    <li><label for="txt_exp_report_date">Report date:</label> <input type="text" id="txt_exp_report_date" name="report_date" /></li>
+                    <li><label for="file_exp_upload">Template file:</label> <input type="file" id="file_exp_upload" name="template" /></li>
+                </ul>
+
+                <button type="submit">Submit</button>
+            </form>
+        </fieldset>
 
     </body>
 </html>

@@ -14,8 +14,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class LiabilityExporter : AbstractVerticle() {
-    private val provinceQuery = "SELECT name, short_name FROM provinces WHERE province_id = ?"
-    private val companyQuery = "SELECT name, alt_name FROM companies WHERE company_id = ?"
+    private val provinceQuery = "SELECT name, short_name FROM provinces WHERE id = ?"
+    private val companyQuery = "SELECT name, alt_name FROM companies WHERE id = ?"
     private val liabilityDetailsQuery = """
         SELECT
           e.type,
@@ -58,9 +58,11 @@ class LiabilityExporter : AbstractVerticle() {
                     val company = getCompany(connection, job.getInteger("company"))
                     val liabilities = getLiabilities(connection, job.getInteger("province"), job.getInteger("company"), job.getString("report_date"))
 
-                    val outputFile = "${company.altName}-${province.shortName}-${job.getString("report_date")}"
+                    val outputFile = "${company.altName}-${province.shortName}-${job.getString("report_date")}.xlsx"
 
                     writeToFile(outputFile, job.getString("filename"), job.getString("report_date"), province, company, liabilities)
+
+                    future.complete(outputFile)
                 } catch (t : Throwable) {
                     connection?.close()
 
@@ -80,7 +82,6 @@ class LiabilityExporter : AbstractVerticle() {
         val statement = connection.prepareStatement(companyQuery)
 
         statement.setInt(1, id)
-        statement.addBatch()
 
         val rs = statement.executeQuery()
 
@@ -88,8 +89,8 @@ class LiabilityExporter : AbstractVerticle() {
             throw Throwable("Unable to find company with id = ${id}")
 
         return Company(
-                name = rs.getString(0),
-                altName = rs.getString(1)
+                name = rs.getString(1),
+                altName = rs.getString(2)
         )
     }
 
@@ -97,7 +98,6 @@ class LiabilityExporter : AbstractVerticle() {
         val statement = connection.prepareStatement(provinceQuery)
 
         statement.setInt(1, id)
-        statement.addBatch()
 
         val rs = statement.executeQuery()
 
@@ -105,8 +105,8 @@ class LiabilityExporter : AbstractVerticle() {
             throw Throwable("Unable to find province with id = ${id}")
 
         return Province(
-                name = rs.getString(0),
-                shortName = rs.getString(1)
+                name = rs.getString(1),
+                shortName = rs.getString(2)
         )
     }
 
@@ -187,7 +187,7 @@ class LiabilityExporter : AbstractVerticle() {
     )
 
     data class ExportRecord (
-            val hierarchyElement : String,
+            val hierarchyElement : String?,
             val type : String,
             val licence : String,
             val status : String,
@@ -198,8 +198,8 @@ class LiabilityExporter : AbstractVerticle() {
             val abandonmentBasic : Double,
             val abandonmentAdditionalEvent : Double,
             val abandonmentGwp : Double,
-            val abandonmentGasMigration : Double,
             val abandonmentVentFlow : Double,
+            val abandonmentGasMigration : Double,
             val abandonmentSiteSpecific : Double,
             val reclamationBasic : Double,
             val reclamationSiteSpecific : Double

@@ -1,11 +1,8 @@
 package com.inferwerx.ogliabilitytracker
 
 import com.inferwerx.ogliabilitytracker.exceptions.MultiAsyncException
-import com.inferwerx.ogliabilitytracker.verticles.workers.AlbertaLiabilityImporter
 import com.inferwerx.ogliabilitytracker.verticles.ApiServer
-import com.inferwerx.ogliabilitytracker.verticles.workers.DatabaseScriptRunner
-import com.inferwerx.ogliabilitytracker.verticles.workers.HierarchyImporter
-import com.inferwerx.ogliabilitytracker.verticles.workers.LiabilityForecaster
+import com.inferwerx.ogliabilitytracker.verticles.workers.*
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.CompositeFuture
 import io.vertx.core.DeploymentOptions
@@ -38,6 +35,7 @@ class Main : AbstractVerticle() {
         val importStartFuture = Future.future<Void>()    // Used to determine if the liability importer verticles started
         val hierarchyMapperFuture = Future.future<Void>()
         val forecasterFuture = Future.future<Void>()
+        var exporterFuture = Future.future<Void>()
 
         val apiDeploymentOptions = DeploymentOptions().setConfig(config())
         val workerDeploymentOptions = DeploymentOptions().setWorker(true).setConfig(config())
@@ -70,9 +68,16 @@ class Main : AbstractVerticle() {
                 forecasterFuture.complete()
         }
 
+        vertx.deployVerticle(LiabilityExporter(), workerDeploymentOptions) {
+            if (it.failed())
+                exporterFuture.fail(it.cause())
+            else
+                exporterFuture.complete()
+        }
+
         try {
             // The API server should only start if the worker verticles started
-            CompositeFuture.all(dbScriptRunnerFuture, importStartFuture, hierarchyMapperFuture, forecasterFuture).setHandler {
+            CompositeFuture.all(dbScriptRunnerFuture, importStartFuture, hierarchyMapperFuture, forecasterFuture, exporterFuture).setHandler {
                 if (it.failed())
                     throw it.cause()
 

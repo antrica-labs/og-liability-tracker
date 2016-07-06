@@ -577,7 +577,7 @@ class ApiServer : AbstractVerticle() {
     /**
      * Exports liability details to a supplied JXLS template
      *
-     * Parameters (in addition to file upload):
+     * Parameters (in addition to the template file upload):
      * company_id - Integer ID of a company
      * province_id - Integer ID of a province
      * report_date - String representation of the report date that details are requested for (yyyy-mm-dd)
