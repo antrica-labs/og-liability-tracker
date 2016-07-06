@@ -2,8 +2,8 @@ package com.inferwerx.ogliabilitytracker.verticles.workers
 
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject
-import org.jxls.util.JxlsHelper
 import org.jxls.common.Context
+import org.jxls.util.JxlsHelper
 import java.io.*
 import java.sql.Connection
 import java.sql.DriverManager
@@ -139,7 +139,7 @@ class LiabilityExporter : AbstractVerticle() {
         while (rs.next()) {
             val record = ExportRecord(
                     type = rs.getString(1),
-                    licence = rs.getString(2),
+                    licence = rs.getInt(2),
                     location = rs.getString(3),
                     hierarchyElement = rs.getString(4),
                     status = rs.getString(5),
@@ -166,7 +166,6 @@ class LiabilityExporter : AbstractVerticle() {
     }
 
     private fun writeToFile(outputFile : String, templateFile : String, reportDate : String, province : Province, company : Company, records : List<ExportRecord>) {
-        val context = Context()
         var input : InputStream? = null
         var output : OutputStream? = null
 
@@ -174,12 +173,16 @@ class LiabilityExporter : AbstractVerticle() {
             input = FileInputStream(templateFile)
             output = FileOutputStream(outputFile)
 
+            val context = Context()
+
             context.putVar("reportDate", reportDate)
             context.putVar("province", province)
             context.putVar("company", company)
             context.putVar("records", records)
 
-            JxlsHelper.getInstance().processTemplate(input, output, context)
+            val helper = JxlsHelper.getInstance()
+
+            helper.processTemplate(input, output, context)
 
             input.close()
             output.close()
@@ -202,7 +205,7 @@ class LiabilityExporter : AbstractVerticle() {
     data class ExportRecord (
             val hierarchyElement : String?,
             val type : String,
-            val licence : String,
+            val licence : Int,
             val status : String,
             val location : String,
             val assetValue : Double,
