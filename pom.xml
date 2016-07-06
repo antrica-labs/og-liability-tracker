@@ -14,7 +14,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.0.3</kotlin.version>
         <junit.version>4.12</junit.version>
-        <vertx.version>3.2.1</vertx.version>
+        <vertx.version>3.3.0</vertx.version>
         <h2.version>1.4.192</h2.version>
         <sqlite.version>3.8.11.2</sqlite.version>
         <commons-csv.version>1.3</commons-csv.version>
