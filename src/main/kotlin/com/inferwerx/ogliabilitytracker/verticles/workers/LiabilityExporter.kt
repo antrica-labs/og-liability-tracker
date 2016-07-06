@@ -4,10 +4,7 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject
 import org.jxls.util.JxlsHelper
 import org.jxls.common.Context
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.InputStream
-import java.io.OutputStream
+import java.io.*
 import java.sql.Connection
 import java.sql.DriverManager
 import java.text.SimpleDateFormat
@@ -43,6 +40,8 @@ class LiabilityExporter : AbstractVerticle() {
     """
 
     override fun start() {
+        val workingDir = config().getString("working-dir")
+
         vertx.eventBus().consumer<String>("og-liability-tracker.liability_exporter") { message ->
             val job = JsonObject(message.body())
 
@@ -58,7 +57,8 @@ class LiabilityExporter : AbstractVerticle() {
                     val company = getCompany(connection, job.getInteger("company"))
                     val liabilities = getLiabilities(connection, job.getInteger("province"), job.getInteger("company"), job.getString("report_date"))
 
-                    val outputFile = "${company.altName}-${province.shortName}-${job.getString("report_date")}.xlsx"
+                    val originalFilename = job.getString("originalFilename")
+                    val outputFile = "${workingDir}${File.separator}${company.altName}-${province.shortName}-${job.getString("report_date")}${getFileExtension(originalFilename)}"
 
                     writeToFile(outputFile, job.getString("filename"), job.getString("report_date"), province, company, liabilities)
 
@@ -76,6 +76,19 @@ class LiabilityExporter : AbstractVerticle() {
             })
 
         }
+    }
+
+    private fun getFileExtension(filename : String) : String {
+        var extension = ""
+
+        val i = filename.lastIndexOf('.')
+        val p = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'))
+
+        if (i > p) {
+            extension = ".${filename.substring(i + 1)}"
+        }
+
+        return extension
     }
 
     private fun getCompany(connection : Connection, id : Int) : Company {

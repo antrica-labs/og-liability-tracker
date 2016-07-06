@@ -20,6 +20,7 @@ import org.h2.jdbc.JdbcSQLException
 import java.io.File
 import java.net.ServerSocket
 import java.nio.file.Files
+import java.nio.file.Paths
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -485,7 +486,7 @@ class ApiServer : AbstractVerticle() {
         future.setHandler {
             context.fileUploads().forEach {
                 try {
-                    Files.delete(File(it.uploadedFileName()).toPath())
+                    Files.delete(Paths.get(it.uploadedFileName()))
                 } catch (t : Throwable) {
                     System.err.println(t.message)
                 }
@@ -591,7 +592,12 @@ class ApiServer : AbstractVerticle() {
             val company = context.request().getParam("company_id")
             val province = context.request().getParam("province_id")
             val reportDateStr = context.request().getParam("report_date")
-            val message = JsonObject().put("province", province.toInt()).put("company", company.toInt()).put("report_date", reportDateStr).put("filename", upload.uploadedFileName())
+            val message = JsonObject()
+                    .put("province", province.toInt())
+                    .put("company", company.toInt())
+                    .put("report_date", reportDateStr)
+                    .put("filename", upload.uploadedFileName())
+                    .put("originalFilename", upload.fileName())
 
             eb.send<String>("og-liability-tracker.liability_exporter", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                 if (reply.succeeded()) {
@@ -604,11 +610,10 @@ class ApiServer : AbstractVerticle() {
             future.complete()
         }
 
-
         future.setHandler {
             context.fileUploads().forEach {
                 try {
-                    Files.delete(File(it.uploadedFileName()).toPath())
+                    Files.delete(Paths.get(it.uploadedFileName()))
                 } catch (t : Throwable) {
                     System.err.println(t.message)
                 }
@@ -619,7 +624,16 @@ class ApiServer : AbstractVerticle() {
             } else {
                 val exportFile = it.result()
 
-                context.response().sendFile(exportFile)
+                val path = Paths.get(exportFile)
+
+                context.response().putHeader("Content-Disposition", "filename=\"${path.fileName.toString()}\"")
+                context.response().sendFile(exportFile) {
+                    try {
+                        Files.delete(path)
+                    } catch (t : Throwable) {
+                        System.err.println(t.message)
+                    }
+                }
             }
         }
     }
