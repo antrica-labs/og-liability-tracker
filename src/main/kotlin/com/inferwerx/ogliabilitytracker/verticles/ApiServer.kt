@@ -240,7 +240,7 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Returns the ass-is historical LLR ratings for a given province and company.
+     * Returns the as-is historical LLR ratings for a given province and company.
      *
      * Parameters:
      * company_id - Integer ID of a company

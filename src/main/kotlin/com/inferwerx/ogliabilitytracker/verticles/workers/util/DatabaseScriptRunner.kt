@@ -2,7 +2,6 @@ package com.inferwerx.ogliabilitytracker.verticles.workers.util
 
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject
-import io.vertx.ext.jdbc.JDBCClient
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
