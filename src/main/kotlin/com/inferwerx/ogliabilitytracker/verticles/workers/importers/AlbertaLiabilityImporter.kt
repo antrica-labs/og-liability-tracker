@@ -1,4 +1,4 @@
-package com.inferwerx.ogliabilitytracker.verticles.workers
+package com.inferwerx.ogliabilitytracker.verticles.workers.importers
 
 import com.inferwerx.ogliabilitytracker.alberta.AbLiability
 import io.vertx.core.AbstractVerticle
@@ -8,6 +8,7 @@ import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.sql.Connection
+import java.sql.Date
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.Statement
@@ -77,12 +78,12 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val facilityMatcher = Pattern.compile(facilityRegex, Pattern.DOTALL).matcher(content)
 
         val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.CANADA)
-        val reportMonth : java.sql.Date
+        val reportMonth : Date
 
         // Every DDS file has a run date in it. This is needed for identification
         if (dateMatcher.find()) {
             val dateString = dateMatcher.group("date")
-            reportMonth = java.sql.Date(dateFormat.parse(dateString).time)
+            reportMonth = Date(dateFormat.parse(dateString).time)
         } else {
             throw Throwable("File format not recognized")
         }

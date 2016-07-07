@@ -1,4 +1,4 @@
-package com.inferwerx.ogliabilitytracker.verticles.workers
+package com.inferwerx.ogliabilitytracker.verticles.workers.importers
 
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject

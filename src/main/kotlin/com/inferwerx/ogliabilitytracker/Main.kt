@@ -3,6 +3,11 @@ package com.inferwerx.ogliabilitytracker
 import com.inferwerx.ogliabilitytracker.exceptions.MultiAsyncException
 import com.inferwerx.ogliabilitytracker.verticles.ApiServer
 import com.inferwerx.ogliabilitytracker.verticles.workers.*
+import com.inferwerx.ogliabilitytracker.verticles.workers.importers.AlbertaLiabilityImporter
+import com.inferwerx.ogliabilitytracker.verticles.workers.importers.HierarchyImporter
+import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.LiabilityExporter
+import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.LiabilityForecaster
+import com.inferwerx.ogliabilitytracker.verticles.workers.util.DatabaseScriptRunner
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.CompositeFuture
 import io.vertx.core.DeploymentOptions
@@ -30,54 +35,29 @@ class Main : AbstractVerticle() {
                 .put("user", config().getString("db.username"))
                 .put("password", config().getString("db.password"))
         val dbClient = JDBCClient.createShared(vertx, dbConfig)
-
-        val dbScriptRunnerFuture = Future.future<Void>() // Used to determine if the db script runner verticle started
-        val importStartFuture = Future.future<Void>()    // Used to determine if the liability importer verticles started
-        val hierarchyMapperFuture = Future.future<Void>()
-        val forecasterFuture = Future.future<Void>()
-        var exporterFuture = Future.future<Void>()
+        val verticleFutures = LinkedList<Future<Any>>()
 
         val apiDeploymentOptions = DeploymentOptions().setConfig(config())
         val workerDeploymentOptions = DeploymentOptions().setWorker(true).setConfig(config())
 
-        vertx.deployVerticle(DatabaseScriptRunner(), workerDeploymentOptions) {
-            if (it.failed())
-                dbScriptRunnerFuture.fail(it.cause())
-            else
-                dbScriptRunnerFuture.complete()
-        }
+        verticleFutures.push(Future.future<Any>())
+        deployWorker(DatabaseScriptRunner(), workerDeploymentOptions, verticleFutures.peek())
 
-        vertx.deployVerticle(AlbertaLiabilityImporter(), workerDeploymentOptions) {
-            if (it.failed())
-                importStartFuture.fail(it.cause())
-            else
-                importStartFuture.complete()
-        }
+        verticleFutures.push(Future.future<Any>())
+        deployWorker(AlbertaLiabilityImporter(), workerDeploymentOptions, verticleFutures.peek())
 
-        vertx.deployVerticle(HierarchyImporter(), workerDeploymentOptions) {
-            if (it.failed())
-                hierarchyMapperFuture.fail(it.cause())
-            else
-                hierarchyMapperFuture.complete()
-        }
+        verticleFutures.push(Future.future<Any>())
+        deployWorker(HierarchyImporter(), workerDeploymentOptions, verticleFutures.peek())
 
-        vertx.deployVerticle(LiabilityForecaster(), workerDeploymentOptions) {
-            if (it.failed())
-                forecasterFuture.fail(it.cause())
-            else
-                forecasterFuture.complete()
-        }
+        verticleFutures.push(Future.future<Any>())
+        deployWorker(LiabilityForecaster(), workerDeploymentOptions, verticleFutures.peek())
 
-        vertx.deployVerticle(LiabilityExporter(), workerDeploymentOptions) {
-            if (it.failed())
-                exporterFuture.fail(it.cause())
-            else
-                exporterFuture.complete()
-        }
+        verticleFutures.push(Future.future<Any>())
+        deployWorker(LiabilityExporter(), workerDeploymentOptions, verticleFutures.peek())
 
         try {
             // The API server should only start if the worker verticles started
-            CompositeFuture.all(dbScriptRunnerFuture, importStartFuture, hierarchyMapperFuture, forecasterFuture, exporterFuture).setHandler {
+            CompositeFuture.all(verticleFutures).setHandler {
                 if (it.failed())
                     throw it.cause()
 
@@ -164,6 +144,14 @@ class Main : AbstractVerticle() {
         } catch (t : Throwable) {
             startFuture.fail(t)
         }
+    }
 
+    private fun deployWorker(verticle : AbstractVerticle, options : DeploymentOptions, future : Future<Any>) {
+        vertx.deployVerticle(verticle, options) {
+            if (it.failed())
+                future.fail(it.cause())
+            else
+                future.complete()
+        }
     }
 }
