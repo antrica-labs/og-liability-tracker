@@ -12,7 +12,6 @@ import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.Statement
 import java.text.SimpleDateFormat
-import java.time.Instant
 import java.util.*
 import java.util.regex.Pattern
 
@@ -78,14 +77,12 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val facilityMatcher = Pattern.compile(facilityRegex, Pattern.DOTALL).matcher(content)
 
         val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.CANADA)
-        val reportMonth : Instant
+        val reportMonth : java.sql.Date
 
         // Every DDS file has a run date in it. This is needed for identification
         if (dateMatcher.find()) {
             val dateString = dateMatcher.group("date")
-            val date = dateFormat.parse(dateString)
-
-            reportMonth = Instant.ofEpochMilli(date.time)
+            reportMonth = java.sql.Date(dateFormat.parse(dateString).time)
         } else {
             throw Throwable("File format not recognized")
         }
@@ -315,7 +312,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                 val pk = entityLookup.get("${item.type}${item.licence.toInt()}") ?: throw Exception("Unable to get an entity match on one or more ratings")
 
                 liabilityStatement.setInt(1, pk)
-                liabilityStatement.setLong(2, item.month.toEpochMilli() / 1000)
+                liabilityStatement.setDate(2, item.month)
                 liabilityStatement.setString(3, item.status)
                 if (item.calculationType != null) liabilityStatement.setString(4, item.calculationType)
                 liabilityStatement.setString(5, item.psv)

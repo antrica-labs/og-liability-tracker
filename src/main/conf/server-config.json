@@ -1,10 +1,10 @@
 {
-  "db.jdbc_driver" : "org.sqlite.JDBC",
-  "db.file_path" : "./database/development.sqlite",
-  "db.url_proto" : "jdbc:sqlite:",
-  "db.url_options" : "",
-  "db.create_script_folder" : "./database/create/sqlite",
-  "db.populate_script_folder" : "./database/populate",
+  "db.jdbc_driver" : "org.h2.Driver",
+  "db.file_path" : "./database/development",
+  "db.url_proto" : "jdbc:h2:",
+  "db.url_options" : ";AUTO_SERVER=TRUE;DATABASE_TO_UPPER=FALSE;",
+  "db.create_script_folder" : "./database/create/h2",
+  "db.populate_script_folder" : "./database/populate/h2",
   "http.port" : 1337,
   "working-dir" : "file-uploads"
 }

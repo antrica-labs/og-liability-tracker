@@ -128,9 +128,9 @@ class LiabilityExporter : AbstractVerticle() {
         val statement = connection.prepareStatement(liabilityDetailsQuery)
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
-        val reportDate = dateFormat.parse(reportDateStr)
+        val reportDate = java.sql.Date(dateFormat.parse(reportDateStr).time)
 
-        statement.setLong(1, reportDate.time / 1000) // Todo: replace with actual time from reportDateStr
+        statement.setDate(1, reportDate)
         statement.setInt(2, companyId)
         statement.setInt(3, provinceId)
 

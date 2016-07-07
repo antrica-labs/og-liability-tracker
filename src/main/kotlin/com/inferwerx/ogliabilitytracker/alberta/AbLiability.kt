@@ -1,9 +1,9 @@
 package com.inferwerx.ogliabilitytracker.alberta
 
-import java.time.Instant
+import java.sql.Date
 
 data class AbLiability (
-        var month : Instant,
+        var month : Date,
         var type : String,
         var licence : String,
         var location : String,

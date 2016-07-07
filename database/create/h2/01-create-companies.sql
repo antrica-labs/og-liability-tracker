@@ -1,5 +1,5 @@
 CREATE TABLE companies (
-    id INTEGER PRIMARY KEY,
+    id IDENTITY PRIMARY KEY,
     name VARCHAR(255),
     alt_name VARCHAR(255)
 );

@@ -197,7 +197,7 @@ class ApiServer : AbstractVerticle() {
         val db = context.get<SQLConnection>("dbconnection")
         val query = """
         SELECT
-          date(r.report_month, 'unixepoch') AS report_month,
+          r.report_month,
           sum(r.asset_value)                AS asset_value,
           sum(r.liability_value)            AS liability_value
         FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
@@ -221,15 +221,15 @@ class ApiServer : AbstractVerticle() {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
         val startDateStr = context.request().getParam("start_date")
         val endDateStr = context.request().getParam("end_date")
-        val startDate = dateFormat.parse(startDateStr)
-        val endDate = dateFormat.parse(endDateStr)
+        val startDate = dateFormat.parse(startDateStr).toInstant()
+        val endDate = dateFormat.parse(endDateStr).toInstant()
 
         val params = JsonArray()
 
         params.add(province.toInt())
         params.add(company.toInt())
-        params.add(startDate.time / 1000)
-        params.add(endDate.time / 1000)
+        params.add(startDate)
+        params.add(endDate)
 
         db.queryWithParams(query, params) { query ->
             if (query.failed())
@@ -252,7 +252,7 @@ class ApiServer : AbstractVerticle() {
         val db = context.get<SQLConnection>("dbconnection")
         val query = """
         SELECT
-          date(r.report_month, 'unixepoch') AS report_month,
+          r.report_month,
           sum(r.asset_value)                AS asset_value,
           sum(r.liability_value)            AS liability_value
         FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
@@ -271,15 +271,15 @@ class ApiServer : AbstractVerticle() {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
         val startDateStr = context.request().getParam("start_date")
         val endDateStr = context.request().getParam("end_date")
-        val startDate = dateFormat.parse(startDateStr)
-        val endDate = dateFormat.parse(endDateStr)
+        val startDate = dateFormat.parse(startDateStr).toInstant()
+        val endDate = dateFormat.parse(endDateStr).toInstant()
 
         val params = JsonArray()
 
         params.add(province.toInt())
         params.add(company.toInt())
-        params.add(startDate.time / 1000)
-        params.add(endDate.time / 1000)
+        params.add(startDate)
+        params.add(endDate)
 
         db.queryWithParams(query, params) { query ->
             if (query.failed())
@@ -299,7 +299,7 @@ class ApiServer : AbstractVerticle() {
     val handleReportDates = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
         val query = """
-        SELECT DISTINCT date(report_month, 'unixepoch') AS report_date
+        SELECT DISTINCT report_month
         FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
         WHERE e.province_id = ? AND e.company_id = ?
         ORDER BY report_month DESC
@@ -363,7 +363,7 @@ class ApiServer : AbstractVerticle() {
           e.licence,
           e.location_identifier,
           h.hierarchy_value,
-          date(r.report_month, 'unixepoch') AS report_month,
+          r.report_month,
           r.entity_status,
           r.calculation_type,
           r.pvs_value_type,
@@ -388,11 +388,11 @@ class ApiServer : AbstractVerticle() {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
         val province = context.request().getParam("province_id")
         val company = context.request().getParam("company_id")
-        val reportMonth = dateFormat.parse(context.request().getParam("report_date"))
+        val reportMonth = dateFormat.parse(context.request().getParam("report_date")).toInstant()
 
         val params = JsonArray()
 
-        params.add(reportMonth.time / 1000)
+        params.add(reportMonth)
         params.add(province.toInt())
         params.add(company.toInt())
 
@@ -512,7 +512,7 @@ class ApiServer : AbstractVerticle() {
         val netbackQuery = "SELECT effective_date, netback FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
         val ratingsQuery = """
             SELECT
-              date(r.report_month, 'unixepoch') AS report_month,
+              r.report_month,
               sum(r.asset_value)                AS asset_value,
               sum(r.liability_value)            AS liability_value
             FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id

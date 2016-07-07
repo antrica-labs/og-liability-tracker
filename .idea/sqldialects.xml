@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/database/create/h2" dialect="H2" />
+    <file url="file://$PROJECT_DIR$/database/create/sqlite" dialect="SQLite" />
+    <file url="file://$PROJECT_DIR$/database/populate/h2" dialect="H2" />
+    <file url="file://$PROJECT_DIR$/database/populate/sqlite" dialect="SQLite" />
+  </component>
+</project>
