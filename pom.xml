@@ -5,12 +5,14 @@
 
     <groupId>com.inferwerx.ogliabilitytracker</groupId>
     <artifactId>api-server</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <packaging>jar</packaging>
 
     <name>com.inferwerx.ogliabilitytracker api-server</name>
 
     <properties>
+        <app.main>io.vertx.core.Launcher</app.main>
+        <app.verticle>com.inferwerx.ogliabilitytracker.Main</app.verticle>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.0.3</kotlin.version>
         <junit.version>4.12</junit.version>
@@ -21,6 +23,8 @@
         <commons-csv.version>1.3</commons-csv.version>
         <jxls.version>2.3.0</jxls.version>
         <jxls-poi.version>1.0.11</jxls-poi.version>
+        <maven.shade.version>2.4.3</maven.shade.version>
+        <maven.resources.version>2.7</maven.resources.version>
     </properties>
 
     <dependencies>
@@ -121,6 +125,98 @@
                         <goals>
                             <goal>test-compile</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven.shade.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml</dependencyReducedPomLocation>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Main-Class>${app.main}</Main-Class>
+                                        <Main-Verticle>${app.verticle}</Main-Verticle>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                            <outputFile>${project.build.directory}/dist/${project.artifactId}-${project.version}.fat.jar</outputFile>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>${maven.resources.version}</version>
+                <executions>
+                    <execution>
+                        <id>copy-api-conf</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/dist/</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>src/main/conf</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>copy-webroot</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/dist/webroot/</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>webroot</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>copy-db-create-scripts</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/dist/database/create/</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>database/create</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>copy-db-llr-values</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/dist/database/populate/</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>database/populate</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
