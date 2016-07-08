@@ -194,22 +194,13 @@ class ApiServer : AbstractVerticle() {
     val handleProFormaRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
 
-        // We could do all of this without creating so many variables, but this is helpful when debugging and probably
-        // gets optimized away during runtime anyway...
         val province = context.request().getParam("province_id")
         val company = context.request().getParam("company_id")
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
-        val startDateStr = context.request().getParam("start_date")
-        val endDateStr = context.request().getParam("end_date")
-        val startDate = dateFormat.parse(startDateStr).toInstant()
-        val endDate = dateFormat.parse(endDateStr).toInstant()
 
         val params = JsonArray()
 
         params.add(province.toInt())
         params.add(company.toInt())
-        params.add(startDate)
-        params.add(endDate)
 
         db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, params) { query ->
             if (query.failed())
@@ -231,22 +222,13 @@ class ApiServer : AbstractVerticle() {
     val handleHistoricalRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
 
-        // We could do all of this without creating so many variables, but this is helpful when debugging and probably
-        // gets optimized away during runtime anyway...
         val province = context.request().getParam("province_id")
         val company = context.request().getParam("company_id")
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
-        val startDateStr = context.request().getParam("start_date")
-        val endDateStr = context.request().getParam("end_date")
-        val startDate = dateFormat.parse(startDateStr).toInstant()
-        val endDate = dateFormat.parse(endDateStr).toInstant()
 
         val params = JsonArray()
 
         params.add(province.toInt())
         params.add(company.toInt())
-        params.add(startDate)
-        params.add(endDate)
 
         db.queryWithParams(InternalQueries.GET_HISTORY, params) { query ->
             if (query.failed())
@@ -443,11 +425,6 @@ class ApiServer : AbstractVerticle() {
 
         val province = context.request().getParam("province_id")
         val company = context.request().getParam("company_id")
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
-        val startDateStr = context.request().getParam("start_date")
-        val endDateStr = context.request().getParam("end_date")
-        val startDate = dateFormat.parse(startDateStr ?: "1970-01-01")
-        val endDate = dateFormat.parse(endDateStr ?: "2999-12-31")
 
         val netbackParams = JsonArray()
         netbackParams.add(company.toInt())
@@ -455,8 +432,6 @@ class ApiServer : AbstractVerticle() {
         val lmrParams = JsonArray()
         lmrParams.add(province.toInt())
         lmrParams.add(company.toInt())
-        lmrParams.add(startDate.time / 1000)
-        lmrParams.add(endDate.time / 1000)
 
         try {
             db.queryWithParams(InternalQueries.GET_NETBACKS, netbackParams) { netback ->

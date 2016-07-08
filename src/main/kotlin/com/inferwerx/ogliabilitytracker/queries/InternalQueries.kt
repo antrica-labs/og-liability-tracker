@@ -54,7 +54,7 @@ class InternalQueries {
             ORDER BY report_month DESC
         """
 
-        val GET_NETBACKS = "SELECT effective_date, netback, shrinkage_factor, oil_equivalent_conversion FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
+        val GET_NETBACKS = "SELECT effective_date, netback, shrinkage_factor, oil_equivalent_conversion FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date ASC"
 
         val GET_REPORT_DETAILS = """
             SELECT
