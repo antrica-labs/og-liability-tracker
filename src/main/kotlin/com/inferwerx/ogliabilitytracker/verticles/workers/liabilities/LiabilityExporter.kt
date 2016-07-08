@@ -1,7 +1,9 @@
 package com.inferwerx.ogliabilitytracker.verticles.workers.liabilities
 
+import com.inferwerx.ogliabilitytracker.queries.InternalQueries
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject
+import org.apache.poi.util.Internal
 import org.jxls.common.Context
 import org.jxls.util.JxlsHelper
 import java.io.*
@@ -11,34 +13,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class LiabilityExporter : AbstractVerticle() {
-    private val provinceQuery = "SELECT name, short_name FROM provinces WHERE id = ?"
-    private val companyQuery = "SELECT name, alt_name FROM companies WHERE id = ?"
-    private val liabilityDetailsQuery = """
-        SELECT
-          e.type,
-          e.licence,
-          e.location_identifier,
-          h.hierarchy_value,
-          r.entity_status,
-          r.pvs_value_type,
-          r.asset_value,
-          r.liability_value,
-          r.abandonment_basic,
-          r.abandonment_additional_event,
-          r.abandonment_gwp,
-          r.abandonment_gas_migration,
-          r.abandonment_vent_flow,
-          r.abandonment_site_specific,
-          r.reclamation_basic,
-          r.reclamation_site_specific
-        FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
-          LEFT OUTER JOIN hierarchy_lookup h ON h.type = e.type AND h.licence = e.licence AND h.company_id = e.company_id
-        WHERE r.report_month = ?
-              AND e.province_id = ?
-              AND e.company_id = ?
-        ORDER BY h.hierarchy_value, e.licence
-    """
-
     override fun start() {
         val workingDir = config().getString("working-dir")
 
@@ -92,7 +66,7 @@ class LiabilityExporter : AbstractVerticle() {
     }
 
     private fun getCompany(connection : Connection, id : Int) : Company {
-        val statement = connection.prepareStatement(companyQuery)
+        val statement = connection.prepareStatement(InternalQueries.GET_COMPANY_BY_ID)
 
         statement.setInt(1, id)
 
@@ -108,7 +82,7 @@ class LiabilityExporter : AbstractVerticle() {
     }
 
     private fun getProvince(connection : Connection, id : Int) : Province {
-        val statement = connection.prepareStatement(provinceQuery)
+        val statement = connection.prepareStatement(InternalQueries.GET_PROVINCE_BY_ID)
 
         statement.setInt(1, id)
 
@@ -125,7 +99,7 @@ class LiabilityExporter : AbstractVerticle() {
 
     private fun getLiabilities(connection : Connection, companyId : Int, provinceId: Int, reportDateStr : String) : List<ExportRecord> {
         val list = LinkedList<ExportRecord>()
-        val statement = connection.prepareStatement(liabilityDetailsQuery)
+        val statement = connection.prepareStatement(InternalQueries.GET_REPORT_DETAILS)
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
         val reportDate = java.sql.Date(dateFormat.parse(reportDateStr).time)

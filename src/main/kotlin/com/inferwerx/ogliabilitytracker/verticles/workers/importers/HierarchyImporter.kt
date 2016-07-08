@@ -1,5 +1,6 @@
 package com.inferwerx.ogliabilitytracker.verticles.workers.importers
 
+import com.inferwerx.ogliabilitytracker.queries.InternalQueries
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject
 import org.apache.commons.csv.CSVFormat
@@ -44,32 +45,33 @@ class HierarchyImporter : AbstractVerticle() {
             connection = DriverManager.getConnection("${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}", config().getString("db.username"), config().getString("db.password"))
             parser = CSVFormat.EXCEL.withHeader(ImportHeaders::class.java).parse(FileReader(filename))
 
-            val statement = connection.createStatement()
-            val preparedStatement = connection.prepareStatement("INSERT INTO hierarchy_lookup (company_id, type, licence, hierarchy_value) VALUES (?, ?, ?, ?)")
+            val deleteStatement = connection.prepareStatement(InternalQueries.DELETE_HIERARCHY_LOOKUPS)
+            val selectStatement = connection.prepareStatement(InternalQueries.INSERT_HIERARCHY_LOOKUP)
 
             for (record in parser) {
                 // skip the header row
                 if (record.get(ImportHeaders.Type) == "Type" && record.get(ImportHeaders.Licence) == "Licence" && record.get(ImportHeaders.HierarchyElement) == "HierarchyElement")
                     continue
 
-                preparedStatement.setInt(1, companyId)
-                preparedStatement.setString(2, record.get(ImportHeaders.Type))
-                preparedStatement.setInt(3, record.get(ImportHeaders.Licence).toInt())
-                preparedStatement.setString(4, record.get(ImportHeaders.HierarchyElement))
+                selectStatement.setInt(1, companyId)
+                selectStatement.setString(2, record.get(ImportHeaders.Type))
+                selectStatement.setInt(3, record.get(ImportHeaders.Licence).toInt())
+                selectStatement.setString(4, record.get(ImportHeaders.HierarchyElement))
 
-                preparedStatement.addBatch()
+                selectStatement.addBatch()
             }
 
             connection.autoCommit = false
 
-            statement.executeUpdate("DELETE FROM hierarchy_lookup WHERE company_id = $companyId")
+            deleteStatement.setInt(1, companyId)
+            deleteStatement.execute()
 
-            recordsPersisted = preparedStatement.executeBatch().size
+            recordsPersisted = selectStatement.executeBatch().size
 
             connection.commit()
 
-            statement.close()
-            preparedStatement.close()
+            deleteStatement.close()
+            selectStatement.close()
 
             parser.close()
             connection.close()

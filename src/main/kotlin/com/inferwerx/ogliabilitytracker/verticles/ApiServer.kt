@@ -1,5 +1,6 @@
 package com.inferwerx.ogliabilitytracker.verticles
 
+import com.inferwerx.ogliabilitytracker.queries.InternalQueries
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.Future
 import io.vertx.core.Handler
@@ -18,6 +19,7 @@ import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.StaticHandler
 import org.h2.jdbc.JdbcSQLException
 import java.io.File
+import java.net.InterfaceAddress
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -157,9 +159,8 @@ class ApiServer : AbstractVerticle() {
      */
     val handleGetProvinces = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val sql = "SELECT id, name, short_name FROM provinces ORDER BY name"
 
-        db.query(sql) { query ->
+        db.query(InternalQueries.GET_ALL_PROVINCES) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -172,9 +173,8 @@ class ApiServer : AbstractVerticle() {
      */
     val handleGetCompanies = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val sql = "SELECT id, name, alt_name FROM companies ORDER BY name"
 
-        db.query(sql) { query ->
+        db.query(InternalQueries.GET_ALL_COMPANIES) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -190,29 +190,9 @@ class ApiServer : AbstractVerticle() {
      * Parameters:
      * company_id - Integer ID of a company
      * province_id - Integer ID of a province
-     * start_date - String representation of the earliest LLR rating to select (yyyy-mm-dd)
-     * end_date - String representation of the latest LLR rating to select (yyyy-mm-dd)
      */
     val handleProFormaRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val query = """
-        SELECT
-          r.report_month,
-          sum(r.asset_value)                AS asset_value,
-          sum(r.liability_value)            AS liability_value
-        FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
-        WHERE e.id IN (
-          SELECT entity_id
-          FROM entity_ratings
-          WHERE report_month IN (SELECT max(report_month) latest_month
-                                 FROM entity_ratings))
-              AND e.province_id = ?
-              AND e.company_id = ?
-              AND r.report_month >= ?
-              AND r.report_month <= ?
-        GROUP BY r.report_month
-        ORDER BY r.report_month
-        """
 
         // We could do all of this without creating so many variables, but this is helpful when debugging and probably
         // gets optimized away during runtime anyway...
@@ -231,7 +211,7 @@ class ApiServer : AbstractVerticle() {
         params.add(startDate)
         params.add(endDate)
 
-        db.queryWithParams(query, params) { query ->
+        db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -250,19 +230,6 @@ class ApiServer : AbstractVerticle() {
      */
     val handleHistoricalRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val query = """
-        SELECT
-          r.report_month,
-          sum(r.asset_value)                AS asset_value,
-          sum(r.liability_value)            AS liability_value
-        FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
-        WHERE e.province_id = ?
-              AND e.company_id = ?
-              AND r.report_month >= ?
-              AND r.report_month <= ?
-        GROUP BY r.report_month
-        ORDER BY r.report_month
-        """
 
         // We could do all of this without creating so many variables, but this is helpful when debugging and probably
         // gets optimized away during runtime anyway...
@@ -281,7 +248,7 @@ class ApiServer : AbstractVerticle() {
         params.add(startDate)
         params.add(endDate)
 
-        db.queryWithParams(query, params) { query ->
+        db.queryWithParams(InternalQueries.GET_HISTORY, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -298,12 +265,6 @@ class ApiServer : AbstractVerticle() {
      */
     val handleReportDates = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val query = """
-        SELECT DISTINCT report_month
-        FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
-        WHERE e.province_id = ? AND e.company_id = ?
-        ORDER BY report_month DESC
-        """
 
         val province = context.request().getParam("province_id")
         val company = context.request().getParam("company_id")
@@ -313,7 +274,7 @@ class ApiServer : AbstractVerticle() {
         params.add(province.toInt())
         params.add(company.toInt())
 
-        db.queryWithParams(query, params) { query ->
+        db.queryWithParams(InternalQueries.GET_REPORT_DATES, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -330,7 +291,6 @@ class ApiServer : AbstractVerticle() {
      */
     val handleHistoricalNetbacks = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val query = "SELECT effective_date, netback, shrinkage_factor, oil_equivalent_conversion FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
 
         val province = context.request().getParam("province_id")
 
@@ -338,7 +298,7 @@ class ApiServer : AbstractVerticle() {
 
         params.add(province.toInt())
 
-        db.queryWithParams(query, params) { query ->
+        db.queryWithParams(InternalQueries.GET_NETBACKS, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -357,33 +317,7 @@ class ApiServer : AbstractVerticle() {
      */
     val handleLiabilityDetails = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
-        val query = """
-        SELECT
-          e.type,
-          e.licence,
-          e.location_identifier,
-          h.hierarchy_value,
-          r.report_month,
-          r.entity_status,
-          r.calculation_type,
-          r.pvs_value_type,
-          r.asset_value,
-          r.liability_value,
-          r.abandonment_basic,
-          r.abandonment_additional_event,
-          r.abandonment_gwp,
-          r.abandonment_gas_migration,
-          r.abandonment_vent_flow,
-          r.abandonment_site_specific,
-          r.reclamation_basic,
-          r.reclamation_site_specific
-        FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
-          LEFT OUTER JOIN hierarchy_lookup h ON h.type = e.type AND h.licence = e.licence AND h.company_id = e.company_id
-        WHERE r.report_month = ?
-              AND e.province_id = ?
-              AND e.company_id = ?
-        ORDER BY h.hierarchy_value, e.licence
-        """
+
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
         val province = context.request().getParam("province_id")
@@ -396,7 +330,7 @@ class ApiServer : AbstractVerticle() {
         params.add(province.toInt())
         params.add(company.toInt())
 
-        db.queryWithParams(query, params) { query ->
+        db.queryWithParams(InternalQueries.GET_REPORT_DETAILS, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -502,32 +436,10 @@ class ApiServer : AbstractVerticle() {
      * Parameters:
      * company_id - Integer ID of a company
      * province_id - Integer ID of a province
-     * start_date (Optional) - String representation of the earliest LLR rating to select (yyyy-mm-dd)
-     * end_date (Optional) - String representation of the last LLR rating to select (yyyy-mm-dd)
      */
     val handleForecastLiabilities = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
         val db = context.get<SQLConnection>("dbconnection")
-
-        val netbackQuery = "SELECT effective_date, netback FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date DESC"
-        val ratingsQuery = """
-            SELECT
-              r.report_month,
-              sum(r.asset_value)                AS asset_value,
-              sum(r.liability_value)            AS liability_value
-            FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
-            WHERE e.id IN (
-              SELECT entity_id
-              FROM entity_ratings
-              WHERE report_month IN (SELECT max(report_month) latest_month
-                                     FROM entity_ratings))
-                  AND e.province_id = ?
-                  AND e.company_id = ?
-                  AND r.report_month >= ?
-                  AND r.report_month <= ?
-            GROUP BY r.report_month
-            ORDER BY r.report_month
-        """
 
         val province = context.request().getParam("province_id")
         val company = context.request().getParam("company_id")
@@ -547,7 +459,7 @@ class ApiServer : AbstractVerticle() {
         lmrParams.add(endDate.time / 1000)
 
         try {
-            db.queryWithParams(netbackQuery, netbackParams) { netback ->
+            db.queryWithParams(InternalQueries.GET_NETBACKS, netbackParams) { netback ->
                 if (netback.failed())
                     throw Throwable(netback.cause())
 
@@ -555,7 +467,7 @@ class ApiServer : AbstractVerticle() {
 
                 message.put("netbacks", netback.result().toJson().getJsonArray("rows"))
 
-                db.queryWithParams(ratingsQuery, lmrParams) { lmr ->
+                db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, lmrParams) { lmr ->
                     if (lmr.failed())
                         throw Throwable(lmr.cause())
 

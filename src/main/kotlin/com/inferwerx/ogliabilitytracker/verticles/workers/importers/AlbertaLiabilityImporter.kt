@@ -1,5 +1,6 @@
 package com.inferwerx.ogliabilitytracker.verticles.workers.importers
 
+import com.inferwerx.ogliabilitytracker.queries.InternalQueries
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.JsonObject
 import java.io.File
@@ -197,12 +198,13 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         val findProvinceSql = "SELECT id, name, short_name FROM provinces WHERE name = 'Alberta'"
         val provinceId : Int
 
-        var statement : Statement? = null
+        var statement : PreparedStatement? = null
 
         try {
-            statement = connection.createStatement()
+            statement = connection.prepareStatement(InternalQueries.GET_PROVINCE_BY_NAME)
+            statement.setString(1, "Alberta")
 
-            val rs = statement.executeQuery(findProvinceSql)
+            val rs = statement.executeQuery()
 
             if (rs.next())
                 provinceId = rs.getInt(1)
@@ -219,14 +221,13 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      * Returns a HashMap containing all of the entities under the given company and province.
      */
     private fun getExistingEntities(connection : Connection, provinceId : Int, companyId : Int) : HashMap<String, Int> {
-        val allEntitiesSql = "SELECT e.id, e.type, e.licence FROM entities e WHERE e.province_id = ? and e.company_id = ?"
         val dictionary = HashMap<String, Int>()
 
         var statement : PreparedStatement? = null
 
         try {
 
-            statement = connection.prepareStatement(allEntitiesSql)
+            statement = connection.prepareStatement(InternalQueries.GET_ENTITIES_BY_COMPANY_AND_PROVINCE)
 
             statement.setInt(1, provinceId)
             statement.setInt(2, companyId)
@@ -247,12 +248,10 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      * Deletes all entity ratings from company, but leaves the entities alone
      */
     private fun clearExistingRatings(connection : Connection, provinceId : Int, companyId : Int) {
-        val clearRatingsSql = "DELETE FROM entity_ratings WHERE entity_id in (SELECT id FROM entities WHERE province_id = ? AND company_id = ?)"
-
         var statement : PreparedStatement? = null
 
         try {
-            statement = connection.prepareStatement(clearRatingsSql)
+            statement = connection.prepareStatement(InternalQueries.DELETE_RATINGS_BY_COMPANY_AND_PROVINCE)
 
             statement.setInt(1, provinceId)
             statement.setInt(2, companyId)
@@ -271,9 +270,6 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      * the same licence concurrently... Needs a better solution.
      */
     private fun insertLiabilities(connection : Connection, provinceId : Int, companyId : Int, liabilities : List<AbLiability>) : Int {
-        val insertEntitySql = "INSERT INTO entities (province_id, company_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
-        val insertLiabilitySql = "INSERT INTO entity_ratings (entity_id, report_month, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-
         val autoCommitBackup = connection.autoCommit
         val savedRatingsCount : Int
 
@@ -285,8 +281,8 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         try {
             connection.autoCommit = false
 
-            entityStatement = connection.prepareStatement(insertEntitySql)
-            liabilityStatement = connection.prepareStatement(insertLiabilitySql)
+            entityStatement = connection.prepareStatement(InternalQueries.INSERT_ENTITY)
+            liabilityStatement = connection.prepareStatement(InternalQueries.INSERT_RATING)
 
             for (item in liabilities) {
                 if (!entityLookup.contains("${item.type}${item.licence.toInt()}")) {
