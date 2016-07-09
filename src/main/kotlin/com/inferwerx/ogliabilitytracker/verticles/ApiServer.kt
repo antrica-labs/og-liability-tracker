@@ -169,8 +169,8 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Returns the **pro forma** LLR ratings for a given province and company. In this context, pro forma means that
-     * only licences that are currently held by the selected company are included in the historical data. This is good
+     * Returns the **pro forma** LLR ratings for a given province. In this context, pro forma means that
+     * only licences that are currently held are included in the historical data. This is good
      * for when you want to calculate asset value decline.
      *
      * Parameters:
@@ -194,7 +194,7 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Returns the as-is historical LLR ratings for a given province and company.
+     * Returns the as-is historical LLR ratings for a given province.
      *
      * Parameters:
      * province_id - Integer ID of a province
@@ -296,7 +296,7 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * One or more DDS files can be uploaded at a time to a company. This call is for uploading Alberta LLR only.
+     * One or more DDS files can be uploaded at a time. This call is for uploading Alberta LLR only.
      *
      * Parameters (in addition to uploaded files):
      * append - If 'on' then LLR data will be appended to any exiting data, otherwise all LLR data for the company
@@ -310,7 +310,6 @@ class ApiServer : AbstractVerticle() {
         val uploadedFiles = JsonArray()
 
         message.put("append", context.request().formAttributes().get("append") == "on")
-        message.put("company", context.request().formAttributes().get("company_id").toInt())
 
         context.fileUploads().forEach {
             val file = JsonObject()

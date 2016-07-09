@@ -21,19 +21,44 @@ class InternalQueries {
         val GET_PROFORMA_HISTORY = """
             SELECT
               r.report_date,
-              sum(r.asset_value)                AS asset_value,
-              sum(r.liability_value)            AS liability_value,
+              sum(r.asset_value)                          AS asset_value,
+              sum(r.liability_value)                      AS liability_value,
               sum(r.asset_value) / sum(r.liability_value) AS rating,
               sum(r.asset_value) - sum(r.liability_value) AS deposit
-            FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
-            WHERE e.id IN (
-              SELECT entity_id
-              FROM entity_ratings
-              WHERE report_date IN (SELECT max(report_date) latest_month
-                                     FROM entity_ratings))
-                  AND e.province_id = ?
-            GROUP BY r.report_date
-            ORDER BY r.report_date
+            FROM
+              entity_ratings r INNER JOIN
+              entities e
+                ON e.id = r.entity_id
+            WHERE
+              e.id IN (
+                SELECT
+                  entity_id
+                FROM
+                  entity_ratings
+                WHERE
+                  report_date IN (
+                    SELECT
+                      max(report_date) latest_month
+                    FROM
+                      entity_ratings))
+              AND e.id NOT IN (
+                SELECT
+                  DISTINCT
+                  e.id
+                FROM
+                  entities e
+                  INNER JOIN
+                  disposed_entities de
+                    ON de.type = e.type AND de.licence = e.licence
+                  INNER JOIN
+                  dispositions d
+                    ON d.id = de.disposition_id
+              )
+              AND e.province_id = ?
+            GROUP BY
+              r.report_date
+            ORDER BY
+              r.report_date
         """
 
         val GET_HISTORY = """

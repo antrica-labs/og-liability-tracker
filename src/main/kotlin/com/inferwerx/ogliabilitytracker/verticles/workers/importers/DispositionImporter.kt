@@ -58,7 +58,7 @@ class DispositionImporter : AbstractVerticle() {
             insertDispStatement.executeUpdate()
 
             val rs = insertDispStatement.generatedKeys
-            var dispId = 0
+            val dispId : Int
 
             if (rs.next()) {
                 dispId = rs.getInt(1)

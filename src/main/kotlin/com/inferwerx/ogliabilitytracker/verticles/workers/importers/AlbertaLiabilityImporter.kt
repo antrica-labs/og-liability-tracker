@@ -28,7 +28,6 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         vertx.eventBus().consumer<String>("og-liability-tracker.ab_importer") { message ->
             val job = JsonObject(message.body())
             val files = job.getJsonArray("uploadedFiles")
-            val company = job.getInteger("company")
             val append = job.getBoolean("append")
 
             vertx.executeBlocking<Int>({ future ->
@@ -42,7 +41,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                         liabilities.addAll(parseLiabilities(path))
                     }
 
-                    val rows = persistLiabilities(company, append, liabilities);
+                    val rows = persistLiabilities(append, liabilities);
 
                     future.complete(rows)
                 } catch (t : Throwable) {
@@ -166,10 +165,10 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
     /**
      * Takes a list of liability ratings and attempts to get them saved in the database
      */
-    private fun persistLiabilities(companyId : Int, append : Boolean, liabilities : List<AbLiability>) : Int {
+    private fun persistLiabilities(append : Boolean, liabilities : List<AbLiability>) : Int {
         Class.forName(config().getString("db.jdbc_driver"))
 
-        var recordsPersisted : Int
+        val recordsPersisted : Int
         var connection : Connection? = null
 
         try {
@@ -178,7 +177,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             val provinceId = getProvince(connection)
 
             if (append == false)
-                clearExistingRatings(connection, provinceId, companyId)
+                clearExistingRatings(connection, provinceId)
 
             recordsPersisted = insertLiabilities(connection, provinceId, liabilities)
         } finally {
@@ -192,7 +191,6 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      *  Gets the ID of the Alberta record in the database
      */
     private fun getProvince(connection : Connection) : Int {
-        val findProvinceSql = "SELECT id, name, short_name FROM provinces WHERE name = 'Alberta'"
         val provinceId : Int
 
         var statement : PreparedStatement? = null
@@ -243,7 +241,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
     /**
      * Deletes all entity ratings from company, but leaves the entities alone
      */
-    private fun clearExistingRatings(connection : Connection, provinceId : Int, companyId : Int) {
+    private fun clearExistingRatings(connection : Connection, provinceId : Int) {
         var statement : PreparedStatement? = null
 
         try {
