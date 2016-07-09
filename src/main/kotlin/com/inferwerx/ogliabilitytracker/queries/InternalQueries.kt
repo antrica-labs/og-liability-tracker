@@ -17,6 +17,27 @@ class InternalQueries {
 
         val INSERT_DISPOSITION = "INSERT INTO dispositions (active, description, effective_date, sale_price) VALUES (?, ?, ?, ?)"
         val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (province_id, disposition_id, type, licence) VALUES (?, ?, ?, ?)"
+        val DELETE_DISPOSITION_ENTITIES = "DELETE FROM disposed_entities WHERE disposition_id = ?"
+        val DELETE_DISPOSITION = "DELETE FROM dispositions WHERE id = ?"
+        val GET_DISPOSITIONS = """
+            SELECT
+              d.id,
+              d.active,
+              d.description,
+              d.effective_date,
+              d.sale_price,
+              count(de.id) AS licence_count
+            FROM
+              dispositions d INNER JOIN
+              disposed_entities de
+                ON de.disposition_id = d.id
+            GROUP BY
+              d.id,
+              d.active,
+              d.description,
+              d.effective_date,
+              d.sale_price
+        """
 
         val GET_PROFORMA_HISTORY = """
             SELECT
@@ -53,6 +74,9 @@ class InternalQueries {
                   INNER JOIN
                   dispositions d
                     ON d.id = de.disposition_id
+                WHERE
+                  d.active = 1
+                  AND de.province_id = ?
               )
               AND e.province_id = ?
             GROUP BY

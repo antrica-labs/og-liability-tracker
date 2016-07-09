@@ -7,6 +7,7 @@ import io.vertx.core.Handler
 import io.vertx.core.eventbus.DeliveryOptions
 import io.vertx.core.eventbus.EventBus
 import io.vertx.core.http.HttpHeaders
+import io.vertx.core.http.HttpMethod
 import io.vertx.core.http.HttpServerResponse
 import io.vertx.core.json.Json
 import io.vertx.core.json.JsonArray
@@ -98,10 +99,12 @@ class ApiServer : AbstractVerticle() {
         route("/api/report_dates").handler(handleReportDates)
         route("/api/historical_netbacks").handler(handleHistoricalNetbacks)
         route("/api/lmr_details").handler(handleLiabilityDetails)
-        route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
-        route("/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
-        route("/api/export_liabilities").handler(handleExportLiabilities)
-        route("/api/create_disposition").handler(handleCreateDisposition)
+        route(HttpMethod.POST, "/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
+        route(HttpMethod.POST, "/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
+        route(HttpMethod.POST, "/api/export_liabilities").handler(handleExportLiabilities)
+        route("/api/get_dispositions").handler(handleGetDispositions)
+        route(HttpMethod.POST, "/api/create_disposition").handler(handleCreateDisposition)
+        route(HttpMethod.POST, "/api/delete_disposition").handler(handleDeleteDisposition)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -179,11 +182,12 @@ class ApiServer : AbstractVerticle() {
     val handleProFormaRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
 
-        val province = context.request().getParam("province_id")
+        val province = context.request().getParam("province_id").toInt()
 
         val params = JsonArray()
 
-        params.add(province.toInt())
+        params.add(province)
+        params.add(province)
 
         db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, params) { query ->
             if (query.failed())
@@ -424,6 +428,38 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+    val handleGetDispositions = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+
+        db.query(InternalQueries.GET_DISPOSITIONS) {
+            if (it.failed())
+                sendError(500, context.response(), it.cause())
+            else
+                context.response().endWithJson(it.result().rows)
+        }
+    }
+
+    val handleDeleteDisposition = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray()
+
+        val id = context.request().formAttributes().get("id")
+
+        params.add(id.toInt())
+
+        db.updateWithParams(InternalQueries.DELETE_DISPOSITION_ENTITIES, params) {
+            if (it.succeeded())
+                db.updateWithParams(InternalQueries.DELETE_DISPOSITION, params) {
+                    if (it.succeeded())
+                        context.response().endWithJson(JsonObject().put("status", "success"))
+                    else
+                        sendError(500, context.response(), it.cause())
+                }
+            else
+                sendError(500, context.response(), it.cause())
+        }
+    }
+
     /**
      * Forecasts LMR ratings in the future using historical LMR ratings. The forecasts starts one month after the specified
      * end_date. If no end_date is specified, then the forecast will start one month after the last month that an LMR
@@ -436,10 +472,11 @@ class ApiServer : AbstractVerticle() {
         val eb = context.get<EventBus>("eventbus")
         val db = context.get<SQLConnection>("dbconnection")
 
-        val province = context.request().getParam("province_id")
+        val province = context.request().getParam("province_id").toInt()
 
         val lmrParams = JsonArray()
-        lmrParams.add(province.toInt())
+        lmrParams.add(province)
+        lmrParams.add(province)
 
         try {
             db.query(InternalQueries.GET_NETBACKS) { netback ->
