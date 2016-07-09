@@ -1,7 +1,7 @@
 CREATE TABLE entity_ratings (
   id IDENTITY PRIMARY KEY,
   entity_id INTEGER,
-  report_month TIMESTAMP,
+  report_date TIMESTAMP,
   entity_status VARCHAR(255),
   calculation_type VARCHAR(255),
   pvs_value_type VARCHAR(255),

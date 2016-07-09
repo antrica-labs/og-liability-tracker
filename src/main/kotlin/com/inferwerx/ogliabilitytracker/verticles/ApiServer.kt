@@ -164,7 +164,7 @@ class ApiServer : AbstractVerticle() {
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
-                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+                context.response().endWithJson(query.result().rows)
         }
     }
 
@@ -178,7 +178,7 @@ class ApiServer : AbstractVerticle() {
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
-                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+                context.response().endWithJson(query.result().rows)
         }
     }
 
@@ -206,7 +206,7 @@ class ApiServer : AbstractVerticle() {
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
-                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+                context.response().endWithJson(query.result().rows)
         }
     }
 
@@ -234,7 +234,7 @@ class ApiServer : AbstractVerticle() {
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
-                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+                context.response().endWithJson(query.result().rows)
         }
     }
 
@@ -260,7 +260,7 @@ class ApiServer : AbstractVerticle() {
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
-                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+                context.response().endWithJson(query.result().rows)
         }
     }
 
@@ -284,7 +284,7 @@ class ApiServer : AbstractVerticle() {
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
-                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+                context.response().endWithJson(query.result().rows)
         }
     }
 
@@ -315,8 +315,9 @@ class ApiServer : AbstractVerticle() {
         db.queryWithParams(InternalQueries.GET_REPORT_DETAILS, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
-            else
-                context.response().endWithJson(query.result().toJson().getJsonArray("rows"))
+            else {
+                context.response().endWithJson(query.result().rows)
+            }
         }
     }
 
@@ -440,17 +441,17 @@ class ApiServer : AbstractVerticle() {
 
                 val message = JsonObject()
 
-                message.put("netbacks", netback.result().toJson().getJsonArray("rows"))
+                message.put("netbacks", netback.result().rows)
 
                 db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, lmrParams) { lmr ->
                     if (lmr.failed())
                         throw Throwable(lmr.cause())
 
-                    message.put("historical_lmr", lmr.result().toJson().getJsonArray("rows"))
+                    message.put("historical_lmr", lmr.result().rows)
 
                     eb.send<String>("og-liability-tracker.forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                         if (reply.succeeded()) {
-                            context.response().endWithJson(JsonObject(reply.result().body()))
+                            context.response().endWithJson(JsonArray(reply.result().body()))
                         } else {
                             throw reply.cause()
                         }

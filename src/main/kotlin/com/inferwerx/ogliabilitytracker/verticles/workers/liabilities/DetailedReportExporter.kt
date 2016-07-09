@@ -12,7 +12,7 @@ import java.sql.DriverManager
 import java.text.SimpleDateFormat
 import java.util.*
 
-class LiabilityExporter : AbstractVerticle() {
+class DetailedReportExporter : AbstractVerticle() {
     override fun start() {
         val workingDir = config().getString("working-dir")
 
@@ -134,7 +134,7 @@ class LiabilityExporter : AbstractVerticle() {
         }
 
         if (list.count() == 0)
-            throw Throwable("Unable to find liabilities with province_id = ${provinceId}, company_id = ${companyId}, report_month = ${reportDateStr}")
+            throw Throwable("Unable to find liabilities with province_id = ${provinceId}, company_id = ${companyId}, report_date = ${reportDateStr}")
 
         return list
     }

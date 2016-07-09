@@ -3,8 +3,8 @@ package com.inferwerx.ogliabilitytracker
 import com.inferwerx.ogliabilitytracker.verticles.ApiServer
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.AlbertaLiabilityImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.HierarchyImporter
-import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.LiabilityExporter
-import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.LiabilityForecaster
+import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.DetailedReportExporter
+import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.HistoricalRatingsForecaster
 import com.inferwerx.ogliabilitytracker.verticles.workers.util.DatabaseScriptRunner
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.CompositeFuture
@@ -48,10 +48,10 @@ class Main : AbstractVerticle() {
         deployWorker(HierarchyImporter(), workerDeploymentOptions, verticleFutures.peek())
 
         verticleFutures.push(Future.future<Any>())
-        deployWorker(LiabilityForecaster(), workerDeploymentOptions, verticleFutures.peek())
+        deployWorker(HistoricalRatingsForecaster(), workerDeploymentOptions, verticleFutures.peek())
 
         verticleFutures.push(Future.future<Any>())
-        deployWorker(LiabilityExporter(), workerDeploymentOptions, verticleFutures.peek())
+        deployWorker(DetailedReportExporter(), workerDeploymentOptions, verticleFutures.peek())
 
         try {
             // The API server should only start if the worker verticles started
