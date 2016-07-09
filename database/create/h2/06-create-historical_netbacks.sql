@@ -1,6 +1,6 @@
 CREATE TABLE historical_netbacks (
     id IDENTITY PRIMARY KEY,
-    province_id INTEGER,
+    province_id TIMESTAMP,
     effective_date DATE,
     netback DOUBLE,
     shrinkage_factor DOUBLE,

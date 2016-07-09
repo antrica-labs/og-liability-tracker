@@ -7,11 +7,8 @@ import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.sql.Connection
+import java.sql.*
 import java.sql.Date
-import java.sql.DriverManager
-import java.sql.PreparedStatement
-import java.sql.Statement
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
@@ -310,7 +307,10 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
                 liabilityStatement.setInt(1, pk)
                 liabilityStatement.setDate(2, item.month)
                 liabilityStatement.setString(3, item.status)
-                if (item.calculationType != null) liabilityStatement.setString(4, item.calculationType)
+                if (item.calculationType != null)
+                    liabilityStatement.setString(4, item.calculationType)
+                else
+                    liabilityStatement.setNull(4, Types.VARCHAR)
                 liabilityStatement.setString(5, item.psv)
                 liabilityStatement.setDouble(6, item.assetValue)
                 liabilityStatement.setDouble(7, item.liabilityValue)
