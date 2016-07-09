@@ -1,6 +1,5 @@
 CREATE TABLE entities (
-  id INTEGER PRIMARY KEY,
-  company_id INTEGER,
+  id IDENTITY PRIMARY KEY,
   province_id INTEGER,
   type VARCHAR(255),
   licence INTEGER,

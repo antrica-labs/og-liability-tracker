@@ -6,17 +6,17 @@ class InternalQueries {
         val GET_PROVINCE_BY_NAME = "SELECT id, name, short_name FROM provinces WHERE name = ?"
         val GET_PROVINCE_BY_ID = "SELECT name, short_name FROM provinces WHERE id = ?"
 
-        val GET_ALL_COMPANIES = "SELECT id, name, alt_name FROM companies ORDER BY name"
-        val GET_COMPANY_BY_ID = "SELECT name, alt_name FROM companies WHERE id = ?"
+        val GET_ENTITIES_BY_PROVINCE = "SELECT e.id, e.type, e.licence FROM entities e WHERE e.province_id = ?"
+        val DELETE_RATINGS_BY_PROVINCE = "DELETE FROM entity_ratings WHERE entity_id in (SELECT id FROM entities WHERE province_id = ?)"
 
-        val GET_ENTITIES_BY_COMPANY_AND_PROVINCE = "SELECT e.id, e.type, e.licence FROM entities e WHERE e.province_id = ? and e.company_id = ?"
-        val DELETE_RATINGS_BY_COMPANY_AND_PROVINCE = "DELETE FROM entity_ratings WHERE entity_id in (SELECT id FROM entities WHERE province_id = ? AND company_id = ?)"
-
-        val INSERT_ENTITY = "INSERT INTO entities (province_id, company_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
+        val INSERT_ENTITY = "INSERT INTO entities (province_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
         val INSERT_RATING = "INSERT INTO entity_ratings (entity_id, report_date, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-        val INSERT_HIERARCHY_LOOKUP = "INSERT INTO hierarchy_lookup (company_id, type, licence, hierarchy_value) VALUES (?, ?, ?, ?)"
-        val DELETE_HIERARCHY_LOOKUPS = "DELETE FROM hierarchy_lookup WHERE company_id = ?"
+        val INSERT_HIERARCHY_LOOKUP = "INSERT INTO hierarchy_lookup (type, licence, hierarchy_value) VALUES (?, ?, ?, ?)"
+        val DELETE_HIERARCHY_LOOKUPS = "DELETE FROM hierarchy_lookup"
+
+        val INSERT_DISPOSITION = "INSERT INTO dispositions (active, description, effective_date, sale_price) VALUES (?, ?, ?, ?)"
+        val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (disposition_id, type, licence) VALUES (?, ?, ?)"
 
         val GET_PROFORMA_HISTORY = """
             SELECT
@@ -32,7 +32,6 @@ class InternalQueries {
               WHERE report_date IN (SELECT max(report_date) latest_month
                                      FROM entity_ratings))
                   AND e.province_id = ?
-                  AND e.company_id = ?
             GROUP BY r.report_date
             ORDER BY r.report_date
         """
@@ -46,7 +45,6 @@ class InternalQueries {
               sum(r.asset_value) - sum(r.liability_value) AS deposit
             FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
             WHERE e.province_id = ?
-                  AND e.company_id = ?
             GROUP BY r.report_date
             ORDER BY r.report_date
         """
@@ -54,7 +52,7 @@ class InternalQueries {
         val GET_REPORT_DATES = """
             SELECT DISTINCT report_date
             FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
-            WHERE e.province_id = ? AND e.company_id = ?
+            WHERE e.province_id = ?
             ORDER BY report_date DESC
         """
 
@@ -79,10 +77,9 @@ class InternalQueries {
               r.reclamation_basic,
               r.reclamation_site_specific
             FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
-              LEFT OUTER JOIN hierarchy_lookup h ON h.type = e.type AND h.licence = e.licence AND h.company_id = e.company_id
+              LEFT OUTER JOIN hierarchy_lookup h ON h.type = e.type AND h.licence = e.licence
             WHERE r.report_date = ?
                   AND e.province_id = ?
-                  AND e.company_id = ?
             ORDER BY h.hierarchy_value, e.licence
         """
     }

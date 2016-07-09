@@ -16,7 +16,7 @@ class HierarchyImporter : AbstractVerticle() {
 
             vertx.executeBlocking<Int>({ future ->
                 try {
-                    val importCount = importFile(job.getInteger("company"), job.getString("filename"))
+                    val importCount = importFile(job.getString("filename"))
 
                     future.complete(importCount)
                 } catch (t : Throwable) {
@@ -34,7 +34,7 @@ class HierarchyImporter : AbstractVerticle() {
     /**
      * Takes a CSV file in the format shown in webroot/resources/sample-hierarchy-update.csv and saves it to the database
      */
-    private fun importFile(companyId : Int, filename : String) : Int {
+    private fun importFile(filename : String) : Int {
         Class.forName(config().getString("db.jdbc_driver"))
 
         val recordsPersisted : Int
@@ -53,17 +53,15 @@ class HierarchyImporter : AbstractVerticle() {
                 if (record.get(ImportHeaders.Type) == "Type" && record.get(ImportHeaders.Licence) == "Licence" && record.get(ImportHeaders.HierarchyElement) == "HierarchyElement")
                     continue
 
-                selectStatement.setInt(1, companyId)
-                selectStatement.setString(2, record.get(ImportHeaders.Type))
-                selectStatement.setInt(3, record.get(ImportHeaders.Licence).toInt())
-                selectStatement.setString(4, record.get(ImportHeaders.HierarchyElement))
+                selectStatement.setString(1, record.get(ImportHeaders.Type))
+                selectStatement.setInt(2, record.get(ImportHeaders.Licence).toInt())
+                selectStatement.setString(3, record.get(ImportHeaders.HierarchyElement))
 
                 selectStatement.addBatch()
             }
 
             connection.autoCommit = false
 
-            deleteStatement.setInt(1, companyId)
             deleteStatement.execute()
 
             recordsPersisted = selectStatement.executeBatch().size

@@ -180,7 +180,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             if (append == false)
                 clearExistingRatings(connection, provinceId, companyId)
 
-            recordsPersisted = insertLiabilities(connection, provinceId, companyId, liabilities)
+            recordsPersisted = insertLiabilities(connection, provinceId, liabilities)
         } finally {
             connection?.close()
         }
@@ -217,17 +217,16 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
     /**
      * Returns a HashMap containing all of the entities under the given company and province.
      */
-    private fun getExistingEntities(connection : Connection, provinceId : Int, companyId : Int) : HashMap<String, Int> {
+    private fun getExistingEntities(connection : Connection, provinceId : Int) : HashMap<String, Int> {
         val dictionary = HashMap<String, Int>()
 
         var statement : PreparedStatement? = null
 
         try {
 
-            statement = connection.prepareStatement(InternalQueries.GET_ENTITIES_BY_COMPANY_AND_PROVINCE)
+            statement = connection.prepareStatement(InternalQueries.GET_ENTITIES_BY_PROVINCE)
 
             statement.setInt(1, provinceId)
-            statement.setInt(2, companyId)
 
             val rs = statement.executeQuery()
 
@@ -248,10 +247,9 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
         var statement : PreparedStatement? = null
 
         try {
-            statement = connection.prepareStatement(InternalQueries.DELETE_RATINGS_BY_COMPANY_AND_PROVINCE)
+            statement = connection.prepareStatement(InternalQueries.DELETE_RATINGS_BY_PROVINCE)
 
             statement.setInt(1, provinceId)
-            statement.setInt(2, companyId)
 
             statement.executeUpdate()
         } finally {
@@ -266,11 +264,11 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
      * up entity ids before inserting, but this likely isn't safe as it's possible for two different connections to insert
      * the same licence concurrently... Needs a better solution.
      */
-    private fun insertLiabilities(connection : Connection, provinceId : Int, companyId : Int, liabilities : List<AbLiability>) : Int {
+    private fun insertLiabilities(connection : Connection, provinceId : Int, liabilities : List<AbLiability>) : Int {
         val autoCommitBackup = connection.autoCommit
         val savedRatingsCount : Int
 
-        var entityLookup = getExistingEntities(connection, provinceId, companyId)
+        var entityLookup = getExistingEntities(connection, provinceId)
 
         var entityStatement : PreparedStatement? = null
         var liabilityStatement : PreparedStatement? = null
@@ -284,10 +282,9 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             for (item in liabilities) {
                 if (!entityLookup.contains("${item.type}${item.licence.toInt()}")) {
                     entityStatement.setInt(1, provinceId)
-                    entityStatement.setInt(2, companyId)
-                    entityStatement.setString(3, item.type)
-                    entityStatement.setInt(4, item.licence.toInt())
-                    entityStatement.setString(5, item.location)
+                    entityStatement.setString(2, item.type)
+                    entityStatement.setInt(3, item.licence.toInt())
+                    entityStatement.setString(4, item.location)
 
                     entityStatement.addBatch()
                     entityLookup.put("${item.type}${item.licence.toInt()}", -1)
@@ -299,7 +296,7 @@ class AlbertaLiabilityImporter : AbstractVerticle() {
             connection.commit()
 
             // Now that we have added all of the missing liabilities we can refresh the lookup
-            entityLookup = getExistingEntities(connection, provinceId, companyId)
+            entityLookup = getExistingEntities(connection, provinceId)
 
             for (item in liabilities) {
                 val pk = entityLookup.get("${item.type}${item.licence.toInt()}") ?: throw Exception("Unable to get an entity match on one or more ratings")

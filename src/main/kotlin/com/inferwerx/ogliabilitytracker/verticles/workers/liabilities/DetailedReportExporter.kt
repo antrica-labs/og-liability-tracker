@@ -28,13 +28,12 @@ class DetailedReportExporter : AbstractVerticle() {
                     connection = DriverManager.getConnection("${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}", config().getString("db.username"), config().getString("db.password"))
 
                     val province = getProvince(connection, job.getInteger("province"))
-                    val company = getCompany(connection, job.getInteger("company"))
                     val liabilities = getLiabilities(connection, job.getInteger("province"), job.getInteger("company"), job.getString("report_date"))
 
                     val originalFilename = job.getString("originalFilename")
-                    val outputFile = "${workingDir}${File.separator}${company.altName}-${province.shortName}-${job.getString("report_date")}${getFileExtension(originalFilename)}"
+                    val outputFile = "${workingDir}${File.separator}-${province.shortName}-${job.getString("report_date")}${getFileExtension(originalFilename)}"
 
-                    writeToFile(outputFile, job.getString("filename"), job.getString("report_date"), province, company, liabilities)
+                    writeToFile(outputFile, job.getString("filename"), job.getString("report_date"), province, liabilities)
 
                     future.complete(outputFile)
                 } catch (t : Throwable) {
@@ -63,22 +62,6 @@ class DetailedReportExporter : AbstractVerticle() {
         }
 
         return extension
-    }
-
-    private fun getCompany(connection : Connection, id : Int) : Company {
-        val statement = connection.prepareStatement(InternalQueries.GET_COMPANY_BY_ID)
-
-        statement.setInt(1, id)
-
-        val rs = statement.executeQuery()
-
-        if (!rs.next())
-            throw Throwable("Unable to find company with id = ${id}")
-
-        return Company(
-                name = rs.getString(1),
-                altName = rs.getString(2)
-        )
     }
 
     private fun getProvince(connection : Connection, id : Int) : Province {
@@ -139,7 +122,7 @@ class DetailedReportExporter : AbstractVerticle() {
         return list
     }
 
-    private fun writeToFile(outputFile : String, templateFile : String, reportDate : String, province : Province, company : Company, records : List<ExportRecord>) {
+    private fun writeToFile(outputFile : String, templateFile : String, reportDate : String, province : Province, records : List<ExportRecord>) {
         var input : InputStream? = null
         var output : OutputStream? = null
 
@@ -151,7 +134,6 @@ class DetailedReportExporter : AbstractVerticle() {
 
             context.putVar("reportDate", reportDate)
             context.putVar("province", province)
-            context.putVar("company", company)
             context.putVar("records", records)
 
             val helper = JxlsHelper.getInstance()
@@ -169,11 +151,6 @@ class DetailedReportExporter : AbstractVerticle() {
     data class Province (
             val name : String,
             val shortName : String
-    )
-
-    data class Company (
-            val name : String,
-            val altName : String
     )
 
     data class ExportRecord (

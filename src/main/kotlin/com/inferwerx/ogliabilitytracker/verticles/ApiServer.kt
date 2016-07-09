@@ -91,7 +91,6 @@ class ApiServer : AbstractVerticle() {
         }
 
         // Setup routes
-        route("/api/companies").handler(handleGetCompanies)
         route("/api/provinces").handler(handleGetProvinces)
         route("/api/historical_lmr").handler(handleHistoricalRatings)
         route("/api/pro_forma_lmr").handler(handleProFormaRatings)
@@ -169,38 +168,21 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Responds with a list of all companies that are in the database
-     */
-    val handleGetCompanies = Handler<RoutingContext> { context ->
-        val db = context.get<SQLConnection>("dbconnection")
-
-        db.query(InternalQueries.GET_ALL_COMPANIES) { query ->
-            if (query.failed())
-                sendError(500, context.response(), query.cause())
-            else
-                context.response().endWithJson(query.result().rows)
-        }
-    }
-
-    /**
      * Returns the **pro forma** LLR ratings for a given province and company. In this context, pro forma means that
      * only licences that are currently held by the selected company are included in the historical data. This is good
      * for when you want to calculate asset value decline.
      *
      * Parameters:
-     * company_id - Integer ID of a company
      * province_id - Integer ID of a province
      */
     val handleProFormaRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
 
         val province = context.request().getParam("province_id")
-        val company = context.request().getParam("company_id")
 
         val params = JsonArray()
 
         params.add(province.toInt())
-        params.add(company.toInt())
 
         db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, params) { query ->
             if (query.failed())
@@ -214,7 +196,6 @@ class ApiServer : AbstractVerticle() {
      * Returns the as-is historical LLR ratings for a given province and company.
      *
      * Parameters:
-     * company_id - Integer ID of a company
      * province_id - Integer ID of a province
      * start_date - String representation of the earliest LLR rating to select (yyyy-mm-dd)
      * end_date - String representation of the latest LLR rating to select (yyyy-mm-dd)
@@ -223,12 +204,10 @@ class ApiServer : AbstractVerticle() {
         val db = context.get<SQLConnection>("dbconnection")
 
         val province = context.request().getParam("province_id")
-        val company = context.request().getParam("company_id")
 
         val params = JsonArray()
 
         params.add(province.toInt())
-        params.add(company.toInt())
 
         db.queryWithParams(InternalQueries.GET_HISTORY, params) { query ->
             if (query.failed())
@@ -242,19 +221,16 @@ class ApiServer : AbstractVerticle() {
      * Returns a list of all months that have liability data
      *
      * Parameters:
-     * company_id - Integer ID of a company
      * province_id - Integer ID of a province
      */
     val handleReportDates = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
 
         val province = context.request().getParam("province_id")
-        val company = context.request().getParam("company_id")
 
         val params = JsonArray()
 
         params.add(province.toInt())
-        params.add(company.toInt())
 
         db.queryWithParams(InternalQueries.GET_REPORT_DATES, params) { query ->
             if (query.failed())
@@ -293,7 +269,6 @@ class ApiServer : AbstractVerticle() {
      * may make a call to /api/report_dates.
      *
      * Parameters:
-     * company_id - Integer ID of a company
      * province_id - Integer ID of a province
      * report_date - String representation of the report date that details are requested for (yyyy-mm-dd)
      */
@@ -303,14 +278,12 @@ class ApiServer : AbstractVerticle() {
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
         val province = context.request().getParam("province_id")
-        val company = context.request().getParam("company_id")
         val reportMonth = dateFormat.parse(context.request().getParam("report_date")).toInstant()
 
         val params = JsonArray()
 
         params.add(reportMonth)
         params.add(province.toInt())
-        params.add(company.toInt())
 
         db.queryWithParams(InternalQueries.GET_REPORT_DETAILS, params) { query ->
             if (query.failed())
@@ -325,7 +298,6 @@ class ApiServer : AbstractVerticle() {
      * One or more DDS files can be uploaded at a time to a company. This call is for uploading Alberta LLR only.
      *
      * Parameters (in addition to uploaded files):
-     * company_id - Integer ID of a company
      * append - If 'on' then LLR data will be appended to any exiting data, otherwise all LLR data for the company
      *          will be cleared before importing the new data. This is handy for when you want to re-upload everything,
      *          or when just add additional months as they become available.
@@ -370,10 +342,7 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * Handles the upload of a hierarchy mapping file, formatted like /webroot/resources/sample-hierarchy-update.csv
-     *
-     * Parameters (in addition to uploaded files):
-     * company_id - Integer ID of a company
+     * Handles the upload of a hierarchy mapping file, formatted like /webroot/resources/sample-hierarchy-update.csv     *
      */
     val handleHierarchyMappingUpload = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
@@ -381,8 +350,7 @@ class ApiServer : AbstractVerticle() {
 
         if (context.fileUploads().count() > 0) {
             val upload = context.fileUploads().toTypedArray()[0]
-            val company = context.request().getParam("company_id")
-            val message = JsonObject().put("company", company.toInt()).put("filename", upload.uploadedFileName())
+            val message = JsonObject().put("filename", upload.uploadedFileName())
 
             eb.send<String>("og-liability-tracker.hierarchy_importer", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                 if (reply.succeeded()) {
@@ -417,7 +385,6 @@ class ApiServer : AbstractVerticle() {
      * report exists.
      *
      * Parameters:
-     * company_id - Integer ID of a company
      * province_id - Integer ID of a province
      */
     val handleForecastLiabilities = Handler<RoutingContext> { context ->
@@ -425,17 +392,12 @@ class ApiServer : AbstractVerticle() {
         val db = context.get<SQLConnection>("dbconnection")
 
         val province = context.request().getParam("province_id")
-        val company = context.request().getParam("company_id")
-
-        val netbackParams = JsonArray()
-        netbackParams.add(company.toInt())
 
         val lmrParams = JsonArray()
         lmrParams.add(province.toInt())
-        lmrParams.add(company.toInt())
 
         try {
-            db.queryWithParams(InternalQueries.GET_NETBACKS, netbackParams) { netback ->
+            db.query(InternalQueries.GET_NETBACKS) { netback ->
                 if (netback.failed())
                     throw Throwable(netback.cause())
 
@@ -467,7 +429,6 @@ class ApiServer : AbstractVerticle() {
      * Exports liability details to a supplied JXLS template
      *
      * Parameters (in addition to the template file upload):
-     * company_id - Integer ID of a company
      * province_id - Integer ID of a province
      * report_date - String representation of the report date that details are requested for (yyyy-mm-dd)
      */
@@ -477,12 +438,10 @@ class ApiServer : AbstractVerticle() {
 
         if (context.fileUploads().count() > 0) {
             val upload = context.fileUploads().toTypedArray()[0]
-            val company = context.request().getParam("company_id")
             val province = context.request().getParam("province_id")
             val reportDateStr = context.request().getParam("report_date")
             val message = JsonObject()
                     .put("province", province.toInt())
-                    .put("company", company.toInt())
                     .put("report_date", reportDateStr)
                     .put("filename", upload.uploadedFileName())
                     .put("originalFilename", upload.fileName())

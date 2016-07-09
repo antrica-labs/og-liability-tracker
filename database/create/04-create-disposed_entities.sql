@@ -1,7 +1,6 @@
 CREATE TABLE disposed_entities (
-  id INTEGER PRIMARY KEY,
+  id IDENTITY PRIMARY KEY,
+  disposition_id INTEGER,
   type VARCHAR(255),
   licence INTEGER,
-  effective_date DATE,
-  created_date DATE
 )
