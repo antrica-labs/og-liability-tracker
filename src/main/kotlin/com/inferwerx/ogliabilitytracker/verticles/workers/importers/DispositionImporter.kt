@@ -18,7 +18,7 @@ class DispositionImporter : AbstractVerticle() {
 
             vertx.executeBlocking<Int>({ future ->
                 try {
-                    val importCount = importFile(job.getString("description"), job.getInstant("effective_date"), job.getDouble("sale_price"), job.getString("filename"))
+                    val importCount = importFile(job.getInteger("province_id"), job.getString("description"), job.getInstant("effective_date"), job.getDouble("sale_price"), job.getString("filename"))
 
                     future.complete(importCount)
                 } catch (t : Throwable) {
@@ -36,7 +36,7 @@ class DispositionImporter : AbstractVerticle() {
     /**
      * Takes a CSV file in the format shown in webroot/resources/sample-disposition-list.csv and saves it to the database
      */
-    private fun importFile(description : String, effectiveDate : Instant, salePrice : Double, filename : String) : Int {
+    private fun importFile(provinceId : Int, description : String, effectiveDate : Instant, salePrice : Double, filename : String) : Int {
         Class.forName(config().getString("db.jdbc_driver"))
 
         val recordsPersisted : Int
@@ -68,12 +68,13 @@ class DispositionImporter : AbstractVerticle() {
 
             for (record in parser) {
                 // skip the header row
-                if (record.get(HierarchyImporter.ImportHeaders.Type) == "Type" && record.get(HierarchyImporter.ImportHeaders.Licence) == "Licence" && record.get(HierarchyImporter.ImportHeaders.HierarchyElement) == "HierarchyElement")
+                if (record.get(ImportHeaders.Type) == "Type" && record.get(ImportHeaders.Licence) == "Licence")
                     continue
 
-                insertLicenceStatement.setInt(1, dispId)
-                insertLicenceStatement.setString(2, record.get(ImportHeaders.Type))
-                insertLicenceStatement.setString(3, record.get(ImportHeaders.Licence))
+                insertLicenceStatement.setInt(1, provinceId)
+                insertLicenceStatement.setInt(2, dispId)
+                insertLicenceStatement.setString(3, record.get(ImportHeaders.Type))
+                insertLicenceStatement.setString(4, record.get(ImportHeaders.Licence))
 
                 insertLicenceStatement.addBatch()
             }

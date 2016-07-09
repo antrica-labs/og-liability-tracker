@@ -15,8 +15,8 @@ class InternalQueries {
         val INSERT_HIERARCHY_LOOKUP = "INSERT INTO hierarchy_lookup (type, licence, hierarchy_value) VALUES (?, ?, ?)"
         val DELETE_HIERARCHY_LOOKUPS = "DELETE FROM hierarchy_lookup"
 
-        val INSERT_DISPOSITION = "INSERT INTO dispositions (active, description, effective_date, sale_price) VALUES (?, ?, ?)"
-        val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (disposition_id, type, licence) VALUES (?, ?, ?)"
+        val INSERT_DISPOSITION = "INSERT INTO dispositions (active, description, effective_date, sale_price) VALUES (?, ?, ?, ?)"
+        val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (province_id, disposition_id, type, licence) VALUES (?, ?, ?, ?)"
 
         val GET_PROFORMA_HISTORY = """
             SELECT

@@ -2,6 +2,7 @@ package com.inferwerx.ogliabilitytracker
 
 import com.inferwerx.ogliabilitytracker.verticles.ApiServer
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.AlbertaLiabilityImporter
+import com.inferwerx.ogliabilitytracker.verticles.workers.importers.DispositionImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.HierarchyImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.DetailedReportExporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.HistoricalRatingsForecaster
@@ -46,6 +47,9 @@ class Main : AbstractVerticle() {
 
         verticleFutures.push(Future.future<Any>())
         deployWorker(HierarchyImporter(), workerDeploymentOptions, verticleFutures.peek())
+
+        verticleFutures.push(Future.future<Any>())
+        deployWorker(DispositionImporter(), workerDeploymentOptions, verticleFutures.peek())
 
         verticleFutures.push(Future.future<Any>())
         deployWorker(HistoricalRatingsForecaster(), workerDeploymentOptions, verticleFutures.peek())

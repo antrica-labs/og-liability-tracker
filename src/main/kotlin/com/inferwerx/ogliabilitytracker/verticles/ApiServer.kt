@@ -101,6 +101,7 @@ class ApiServer : AbstractVerticle() {
         route("/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route("/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
         route("/api/export_liabilities").handler(handleExportLiabilities)
+        route("/api/create_disposition").handler(handleCreateDisposition)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -367,6 +368,51 @@ class ApiServer : AbstractVerticle() {
             future.complete()
         }
 
+
+        future.setHandler {
+            context.fileUploads().forEach {
+                try {
+                    Files.delete(Paths.get(it.uploadedFileName()))
+                } catch (t : Throwable) {
+                    System.err.println(t.message)
+                }
+            }
+        }
+    }
+
+    /**
+     * Handles the setup of disposition senarios. Includes a CSV file upload like /webroot/resources/sample-dispostion-list.csv
+     */
+    val handleCreateDisposition = Handler<RoutingContext> { context ->
+        val eb = context.get<EventBus>("eventbus")
+        val future = Future.future<Void>()
+
+        val upload = context.fileUploads().toTypedArray()[0]
+        val description = context.request().getParam("description")
+        val salePrice = context.request().getParam("sale_price").toDouble()
+        val province = context.request().getParam("province_id").toInt()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
+        val effectiveDate = dateFormat.parse(context.request().getParam("effective_date")).toInstant()
+
+        val message = JsonObject()
+
+        message.put("description", description)
+        message.put("effective_date", effectiveDate)
+        message.put("sale_price", salePrice)
+        message.put("province_id", province)
+        message.put("filename", upload.uploadedFileName())
+
+        eb.send<String>("og-liability-tracker.disposition_importer", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+            if (reply.succeeded()) {
+                context.response().endWithJson(JsonObject(reply.result().body()))
+
+                future.complete()
+            } else {
+                context.response().endWithJson(JsonObject().put("status", "failed").put("message", reply.cause().toString()))
+
+                future.complete()
+            }
+        }
 
         future.setHandler {
             context.fileUploads().forEach {
