@@ -9,13 +9,13 @@ class InternalQueries {
         val GET_ENTITIES_BY_PROVINCE = "SELECT e.id, e.type, e.licence FROM entities e WHERE e.province_id = ?"
         val DELETE_RATINGS_BY_PROVINCE = "DELETE FROM entity_ratings WHERE entity_id in (SELECT id FROM entities WHERE province_id = ?)"
 
-        val INSERT_ENTITY = "INSERT INTO entities (province_id, type, licence, location_identifier) VALUES (?, ?, ?, ?, ?)"
+        val INSERT_ENTITY = "INSERT INTO entities (province_id, type, licence, location_identifier) VALUES (?, ?, ?, ?)"
         val INSERT_RATING = "INSERT INTO entity_ratings (entity_id, report_date, entity_status, calculation_type, pvs_value_type, asset_value, liability_value, abandonment_basic, abandonment_additional_event, abandonment_gwp, abandonment_gas_migration, abandonment_vent_flow, abandonment_site_specific, reclamation_basic, reclamation_site_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-        val INSERT_HIERARCHY_LOOKUP = "INSERT INTO hierarchy_lookup (type, licence, hierarchy_value) VALUES (?, ?, ?, ?)"
+        val INSERT_HIERARCHY_LOOKUP = "INSERT INTO hierarchy_lookup (type, licence, hierarchy_value) VALUES (?, ?, ?)"
         val DELETE_HIERARCHY_LOOKUPS = "DELETE FROM hierarchy_lookup"
 
-        val INSERT_DISPOSITION = "INSERT INTO dispositions (active, description, effective_date, sale_price) VALUES (?, ?, ?, ?)"
+        val INSERT_DISPOSITION = "INSERT INTO dispositions (active, description, effective_date, sale_price) VALUES (?, ?, ?)"
         val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (disposition_id, type, licence) VALUES (?, ?, ?)"
 
         val GET_PROFORMA_HISTORY = """

@@ -28,10 +28,10 @@ class DetailedReportExporter : AbstractVerticle() {
                     connection = DriverManager.getConnection("${config().getString("db.url_proto")}${config().getString("db.file_path")}${config().getString("db.url_options")}", config().getString("db.username"), config().getString("db.password"))
 
                     val province = getProvince(connection, job.getInteger("province"))
-                    val liabilities = getLiabilities(connection, job.getInteger("province"), job.getInteger("company"), job.getString("report_date"))
+                    val liabilities = getLiabilities(connection, job.getInteger("province"), job.getString("report_date"))
 
                     val originalFilename = job.getString("originalFilename")
-                    val outputFile = "${workingDir}${File.separator}-${province.shortName}-${job.getString("report_date")}${getFileExtension(originalFilename)}"
+                    val outputFile = "${workingDir}${File.separator}${province.shortName}-${job.getString("report_date")}${getFileExtension(originalFilename)}"
 
                     writeToFile(outputFile, job.getString("filename"), job.getString("report_date"), province, liabilities)
 
@@ -80,7 +80,7 @@ class DetailedReportExporter : AbstractVerticle() {
         )
     }
 
-    private fun getLiabilities(connection : Connection, companyId : Int, provinceId: Int, reportDateStr : String) : List<ExportRecord> {
+    private fun getLiabilities(connection : Connection, provinceId: Int, reportDateStr : String) : List<ExportRecord> {
         val list = LinkedList<ExportRecord>()
         val statement = connection.prepareStatement(InternalQueries.GET_REPORT_DETAILS)
 
@@ -88,8 +88,7 @@ class DetailedReportExporter : AbstractVerticle() {
         val reportDate = java.sql.Date(dateFormat.parse(reportDateStr).time)
 
         statement.setDate(1, reportDate)
-        statement.setInt(2, companyId)
-        statement.setInt(3, provinceId)
+        statement.setInt(2, provinceId)
 
         val rs = statement.executeQuery()
 
@@ -117,7 +116,7 @@ class DetailedReportExporter : AbstractVerticle() {
         }
 
         if (list.count() == 0)
-            throw Throwable("Unable to find liabilities with province_id = ${provinceId}, company_id = ${companyId}, report_date = ${reportDateStr}")
+            throw Throwable("Unable to find liabilities with province_id = ${provinceId}, report_date = ${reportDateStr}")
 
         return list
     }

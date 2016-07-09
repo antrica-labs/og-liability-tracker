@@ -3,8 +3,8 @@
   "db.file_path" : "./database/development",
   "db.url_proto" : "jdbc:h2:",
   "db.url_options" : ";AUTO_SERVER=TRUE;DATABASE_TO_UPPER=FALSE;",
-  "db.create_script_folder" : "./database/create/h2",
-  "db.populate_script_folder" : "./database/populate/h2",
+  "db.create_script_folder" : "./database/create",
+  "db.populate_script_folder" : "./database/populate",
   "http.port" : 1337,
   "working-dir" : "file-uploads"
 }
