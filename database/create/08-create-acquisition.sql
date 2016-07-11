@@ -1,4 +1,4 @@
-CREATE TABLE acquisition (
+CREATE TABLE acquisitions (
   id IDENTITY PRIMARY KEY,
   province_id INTEGER,
   active BOOLEAN,

@@ -95,18 +95,22 @@ class ApiServer : AbstractVerticle() {
         route(HttpMethod.GET,  "/api/provinces").handler(handleGetProvinces)
         route(HttpMethod.GET,  "/api/historical_lmr").handler(handleHistoricalRatings)
         route(HttpMethod.GET,  "/api/pro_forma_lmr").handler(handleProFormaRatings)
-        route(HttpMethod.GET,  "/api/forecasted_lmr").handler(handleForecastLiabilities)
+        route(HttpMethod.GET,  "/api/simple_forecasted_lmr").handler(handleSimpleForecastLiabilities)
+        route(HttpMethod.GET,  "/api/combined_forecasted_lrm").handler(handleCombinedForecastLiabilities)
         route(HttpMethod.GET,  "/api/report_dates").handler(handleReportDates)
         route(HttpMethod.GET,  "/api/historical_netbacks").handler(handleHistoricalNetbacks)
         route(HttpMethod.GET,  "/api/lmr_details").handler(handleLiabilityDetails)
         route(HttpMethod.POST, "/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route(HttpMethod.POST, "/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
         route(HttpMethod.POST, "/api/export_liabilities").handler(handleExportLiabilities)
-        route(HttpMethod.GET,  "/api/get_dispositions").handler(handleGetDispositions)
+        route(HttpMethod.GET,  "/api/dispositions").handler(handleGetDispositions)
         route(HttpMethod.POST, "/api/create_disposition").handler(handleCreateDisposition)
         route(HttpMethod.POST, "/api/delete_disposition").handler(handleDeleteDisposition)
+        route(HttpMethod.GET,  "/api/acquisitions").handler(handleGetAcquisitions)
+        route(HttpMethod.POST, "/api/create_acquisition").handler(handleCreateAcquisition)
+        route(HttpMethod.POST, "/api/delete_acquisition").handler(handleDeleteAcquisition)
+        route(HttpMethod.GET,  "/api/aro_plans").handler(handleGetAroPlans)
         route(HttpMethod.POST, "/api/create_aro_plan").handler(handleCreateAroPlan)
-        route(HttpMethod.GET,  "/api/get_aro_plans").handler(handleGetAroPlans)
         route(HttpMethod.POST, "/api/delete_aro_plan").handler(handleDeleteAroPlan)
 
         // Serves static files out of the 'webroot' folder
@@ -464,15 +468,90 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+    val handleCreateAcquisition = Handler<RoutingContext> { context ->
+        val eb = context.get<EventBus>("eventbus")
+        val future = Future.future<Void>()
+
+        val upload = context.fileUploads().toTypedArray()[0]
+        val description = context.request().getParam("description")
+        val purchasePrice = context.request().getParam("purchase_price").toDouble()
+        val province = context.request().getParam("province_id").toInt()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
+        val effectiveDate = dateFormat.parse(context.request().getParam("effective_date")).toInstant()
+
+        val message = JsonObject()
+
+        message.put("description", description)
+        message.put("effective_date", effectiveDate)
+        message.put("purchase_price", purchasePrice)
+        message.put("province_id", province)
+        message.put("filename", upload.uploadedFileName())
+
+        eb.send<String>("og-liability-tracker.acquisition_importer", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+            if (reply.succeeded()) {
+                context.response().endWithJson(JsonObject(reply.result().body()))
+
+                future.complete()
+            } else {
+                context.response().endWithJson(JsonObject().put("status", "failed").put("message", reply.cause().toString()))
+
+                future.complete()
+            }
+        }
+
+        future.setHandler {
+            context.fileUploads().forEach {
+                try {
+                    Files.delete(Paths.get(it.uploadedFileName()))
+                } catch (t : Throwable) {
+                    System.err.println(t.message)
+                }
+            }
+        }
+    }
+
+    val handleGetAcquisitions = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray().add(context.request().getParam("province_id").toInt())
+
+        db.queryWithParams(InternalQueries.GET_ACQUISITIONS, params) {
+            if (it.failed())
+                sendError(500, context.response(), it.cause())
+            else
+                context.response().endWithJson(it.result().rows)
+        }
+    }
+
+    val handleDeleteAcquisition = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray()
+
+        val id = context.request().formAttributes().get("id")
+
+        params.add(id.toInt())
+
+        db.updateWithParams(InternalQueries.DELETE_ACQUISITION_LICENCES, params) {
+            if (it.succeeded())
+                db.updateWithParams(InternalQueries.DELETE_ACQUISITION, params) {
+                    if (it.succeeded())
+                        context.response().endWithJson(JsonObject().put("status", "success"))
+                    else
+                        sendError(500, context.response(), it.cause())
+                }
+            else
+                sendError(500, context.response(), it.cause())
+        }
+    }
+
     /**
-     * Forecasts LMR ratings in the future using historical LMR ratings. The forecasts starts one month after the specified
-     * end_date. If no end_date is specified, then the forecast will start one month after the last month that an LMR
-     * report exists.
+     * Forecasts LMR ratings in the future using historical LMR ratings. The forecast starts one month after the last
+     * month that an LMR report exists for. This forecast will include dispositions, the only way to forecast their
+     * impact is to remove them from historical reports.
      *
      * Parameters:
      * province_id - Integer ID of a province
      */
-    val handleForecastLiabilities = Handler<RoutingContext> { context ->
+    val handleSimpleForecastLiabilities = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
         val db = context.get<SQLConnection>("dbconnection")
 
@@ -497,7 +576,7 @@ class ApiServer : AbstractVerticle() {
 
                     message.put("historical_lmr", lmr.result().rows)
 
-                    eb.send<String>("og-liability-tracker.forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                    eb.send<String>("og-liability-tracker.simple_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                         if (reply.succeeded()) {
                             context.response().endWithJson(JsonArray(reply.result().body()))
                         } else {
@@ -509,6 +588,17 @@ class ApiServer : AbstractVerticle() {
         } catch (t : Throwable) {
             sendError(500, context.response(), t)
         }
+    }
+
+    /**
+     * The difference between the simple forecast and this combined forecast is the layering in of growth, acquisitions,
+     * remediation and dispositions.
+     *
+     * Parameters:
+     * province_id - Integer ID of a province
+     */
+    val handleCombinedForecastLiabilities = Handler<RoutingContext> { context ->
+
     }
 
     /**
@@ -591,7 +681,7 @@ class ApiServer : AbstractVerticle() {
         params.add(cost)
         params.add(comments)
 
-        db.updateWithParams(InternalQueries.CREATE_ARO_PLAN, params) {
+        db.updateWithParams(InternalQueries.INSERT_ARO_PLAN, params) {
             if (it.succeeded())
                 context.response().endWithJson(JsonObject().put("status", "success").put("results", it.result().keys))
             else

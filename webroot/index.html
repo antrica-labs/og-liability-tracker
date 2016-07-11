@@ -9,7 +9,7 @@
     </head>
     <body>
         <fieldset>
-            <legend>Upload DDS Files</legend>
+            <legend>Upload DDS files</legend>
 
             <form action="/api/upload_ab_liabilities" method="post" enctype="multipart/form-data">
                 <ul>
@@ -25,7 +25,7 @@
         <br />
 
         <fieldset>
-            <legend>Upload Hierarchy Mapping</legend>
+            <legend>Upload hierarchy mapping</legend>
 
             <form action="/api/upload_hierarchy_mapping" method="post" enctype="multipart/form-data">
                 <ul>
@@ -43,11 +43,29 @@
 
             <form action="/api/create_disposition" method="post" enctype="multipart/form-data">
                 <ul>
+                    <li><label for="txt_disp_province">Province:</label> <input type="text" id="txt_disp_province" name="province_id" value="1" /></li>
                     <li><label for="txt_disp_description">Description:</label> <input type="text" id="txt_disp_description" name="description" /></li>
                     <li><label for="txt_disp_sale_price">Sale price:</label> <input type="text" id="txt_disp_sale_price" name="sale_price" /></li>
-                    <li><label for="txt_disp_province">Province:</label> <input type="text" id="txt_disp_province" name="province_id" /></li>
                     <li><label for="txt_disp_effective_date">Effective date:</label> <input type="text" id="txt_disp_effective_date" name="effective_date" /></li>
                     <li><label for="file_disp_upload">File:</label> <input type="file" id="file_disp_upload" name="file" /></li>
+                </ul>
+
+                <button type="submit">Submit</button>
+            </form>
+        </fieldset>
+
+        <br />
+
+        <fieldset>
+            <legend>Upload acquisition target</legend>
+
+            <form action="/api/create_acquisition" method="post" enctype="multipart/form-data">
+                <ul>
+                    <li><label for="txt_acq_province">Province:</label> <input type="text" id="txt_acq_province" name="province_id" value="1" /></li>
+                    <li><label for="txt_acq_description">Description:</label> <input type="text" id="txt_acq_description" name="description" /></li>
+                    <li><label for="txt_acq_purchase_price">Purchase price:</label> <input type="text" id="txt_acq_purchase_price" name="purchase_price" /></li>
+                    <li><label for="txt_acq_effective_date">Effective date:</label> <input type="text" id="txt_acq_effective_date" name="effective_date" /></li>
+                    <li><label for="file_acq_upload">File:</label> <input type="file" id="file_acq_upload" name="file" /></li>
                 </ul>
 
                 <button type="submit">Submit</button>
@@ -61,8 +79,8 @@
 
             <form action="/api/create_aro_plan" method="post">
                 <ul>
+                    <li><label for="txt_aro_province">Province:</label> <input type="text" id="txt_aro_province" name="province_id" value="1" /></li>
                     <li><label for="txt_aro_description">Description:</label> <input type="text" id="txt_aro_description" name="description" /></li>
-                    <li><label for="txt_aro_province">Province:</label> <input type="text" id="txt_aro_province" name="province_id" /></li>
                     <li><label for="txt_aro_effective_date">Effective date:</label> <input type="text" id="txt_aro_effective_date" name="effective_date" /></li>
                     <li><label for="txt_aro_reduction_amount">Liability reduction amount:</label> <input type="text" id="txt_aro_reduction_amount" name="reduction_amount" /></li>
                     <li><label for="txt_aro_cost">Cost:</label> <input type="text" id="txt_aro_cost" name="cost" /></li>

@@ -14,7 +14,7 @@ import java.util.*
  */
 class HistoricalRatingsForecaster : AbstractVerticle() {
     override fun start() {
-        vertx.eventBus().consumer<String>("og-liability-tracker.forecaster") { message ->
+        vertx.eventBus().consumer<String>("og-liability-tracker.simple_forecaster") { message ->
             try {
                 val job = JsonObject(message.body())
 

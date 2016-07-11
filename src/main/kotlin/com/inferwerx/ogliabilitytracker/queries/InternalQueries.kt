@@ -33,9 +33,10 @@ class InternalQueries {
               disposed_entities de
                 ON de.disposition_id = d.id
             WHERE
-              province_id = ?
+              d.province_id = ?
             GROUP BY
               d.id,
+              d.province_id,
               d.active,
               d.description,
               d.effective_date,
@@ -135,9 +136,37 @@ class InternalQueries {
             ORDER BY h.hierarchy_value, e.licence
         """
 
-        val GET_ARO_PLANS = "SELECT * FROM aro_plans WHERE province_id = ? ORDER BY effective_date"
-        val CREATE_ARO_PLAN = "INSERT INTO aro_plans (province_id, active, description, effective_date, reduction_amount, cost, comments) values (?, ?, ?, ?, ?, ?, ?)"
+        val GET_ARO_PLANS = "SELECT id, province_id, active, description, effective_date, reduction_amount, cost, comments FROM aro_plans WHERE province_id = ? ORDER BY effective_date"
+        val INSERT_ARO_PLAN = "INSERT INTO aro_plans (province_id, active, description, effective_date, reduction_amount, cost, comments) values (?, ?, ?, ?, ?, ?, ?)"
         val DELETE_ARO_PLAN = "DELETE FROM aro_plans WHERE id = ?"
 
+        val INSERT_ACQUISITION = "INSERT INTO acquisitions (province_id, active, description, effective_date, purchase_price) VALUES (?, ?, ?, ?, ?)"
+        val INSERT_ACQUISITION_LICENCE = "INSERT INTO acquisition_licences (acquisition_id, type, licence, liability_amount) VALUES (?, ?, ?, ?)"
+        val DELETE_ACQUISITION_LICENCES = "DELETE FROM acquisition_licences WHERE acquisition_id = ?"
+        val DELETE_ACQUISITION = "DELETE FROM acquisitions WHERE id = ?"
+        val GET_ACQUISITIONS = """
+            SELECT
+              a.id,
+              a.province_id,
+              a.active,
+              a.description,
+              a.effective_date,
+              a.purchase_price,
+              count(l.id) AS licence_count,
+              sum(l.liability_amount) as total_liability
+            FROM
+              acquisitions a INNER JOIN
+              acquisition_licences l
+                ON l.acquisition_id = a.id
+            WHERE
+              a.province_id = ?
+            GROUP BY
+              a.id,
+              a.province_id,
+              a.active,
+              a.description,
+              a.effective_date,
+              a.purchase_price
+        """
     }
 }
