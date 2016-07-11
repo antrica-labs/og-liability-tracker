@@ -50,10 +50,11 @@ class DispositionImporter : AbstractVerticle() {
             val insertDispStatement = connection.prepareStatement(InternalQueries.INSERT_DISPOSITION, Statement.RETURN_GENERATED_KEYS)
             val insertLicenceStatement = connection.prepareStatement(InternalQueries.INSERT_DISPOSITION_ENTITY)
 
-            insertDispStatement.setBoolean(1, true)
-            insertDispStatement.setString(2, description)
-            insertDispStatement.setDate(3, java.sql.Date(java.util.Date.from(effectiveDate).time))
-            insertDispStatement.setDouble(4, salePrice)
+            insertDispStatement.setInt(1, provinceId)
+            insertDispStatement.setBoolean(2, true)
+            insertDispStatement.setString(3, description)
+            insertDispStatement.setDate(4, java.sql.Date(java.util.Date.from(effectiveDate).time))
+            insertDispStatement.setDouble(5, salePrice)
 
             insertDispStatement.executeUpdate()
 
@@ -71,10 +72,9 @@ class DispositionImporter : AbstractVerticle() {
                 if (record.get(ImportHeaders.Type) == "Type" && record.get(ImportHeaders.Licence) == "Licence")
                     continue
 
-                insertLicenceStatement.setInt(1, provinceId)
-                insertLicenceStatement.setInt(2, dispId)
-                insertLicenceStatement.setString(3, record.get(ImportHeaders.Type))
-                insertLicenceStatement.setString(4, record.get(ImportHeaders.Licence))
+                insertLicenceStatement.setInt(1, dispId)
+                insertLicenceStatement.setString(2, record.get(ImportHeaders.Type))
+                insertLicenceStatement.setString(3, record.get(ImportHeaders.Licence))
 
                 insertLicenceStatement.addBatch()
             }

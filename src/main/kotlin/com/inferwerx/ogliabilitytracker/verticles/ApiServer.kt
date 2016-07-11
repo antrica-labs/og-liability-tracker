@@ -91,20 +91,23 @@ class ApiServer : AbstractVerticle() {
             sendError(500, context.response())
         }
 
-        // Setup routes
-        route("/api/provinces").handler(handleGetProvinces)
-        route("/api/historical_lmr").handler(handleHistoricalRatings)
-        route("/api/pro_forma_lmr").handler(handleProFormaRatings)
-        route("/api/forecasted_lmr").handler(handleForecastLiabilities)
-        route("/api/report_dates").handler(handleReportDates)
-        route("/api/historical_netbacks").handler(handleHistoricalNetbacks)
-        route("/api/lmr_details").handler(handleLiabilityDetails)
+        // Setup APIs
+        route(HttpMethod.GET,  "/api/provinces").handler(handleGetProvinces)
+        route(HttpMethod.GET,  "/api/historical_lmr").handler(handleHistoricalRatings)
+        route(HttpMethod.GET,  "/api/pro_forma_lmr").handler(handleProFormaRatings)
+        route(HttpMethod.GET,  "/api/forecasted_lmr").handler(handleForecastLiabilities)
+        route(HttpMethod.GET,  "/api/report_dates").handler(handleReportDates)
+        route(HttpMethod.GET,  "/api/historical_netbacks").handler(handleHistoricalNetbacks)
+        route(HttpMethod.GET,  "/api/lmr_details").handler(handleLiabilityDetails)
         route(HttpMethod.POST, "/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route(HttpMethod.POST, "/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
         route(HttpMethod.POST, "/api/export_liabilities").handler(handleExportLiabilities)
-        route("/api/get_dispositions").handler(handleGetDispositions)
+        route(HttpMethod.GET,  "/api/get_dispositions").handler(handleGetDispositions)
         route(HttpMethod.POST, "/api/create_disposition").handler(handleCreateDisposition)
         route(HttpMethod.POST, "/api/delete_disposition").handler(handleDeleteDisposition)
+        route(HttpMethod.POST, "/api/create_aro_plan").handler(handleCreateAroPlan)
+        route(HttpMethod.GET,  "/api/get_aro_plans").handler(handleGetAroPlans)
+        route(HttpMethod.POST, "/api/delete_aro_plan").handler(handleDeleteAroPlan)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -430,8 +433,9 @@ class ApiServer : AbstractVerticle() {
 
     val handleGetDispositions = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray().add(context.request().getParam("province_id").toInt())
 
-        db.query(InternalQueries.GET_DISPOSITIONS) {
+        db.queryWithParams(InternalQueries.GET_DISPOSITIONS, params) {
             if (it.failed())
                 sendError(500, context.response(), it.cause())
             else
@@ -564,6 +568,63 @@ class ApiServer : AbstractVerticle() {
                     }
                 }
             }
+        }
+    }
+
+    val handleCreateAroPlan = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CANADA)
+
+        val province = context.request().formAttributes().get("province_id").toInt()
+        val description = context.request().formAttributes().get("description")
+        val effectiveDate = dateFormat.parse(context.request().getParam("effective_date")).toInstant()
+        val reductionAmount = context.request().formAttributes().get("reduction_amount").toDouble()
+        val cost = context.request().formAttributes().get("cost").toDouble()
+        val comments = context.request().formAttributes().get("comments")
+
+        params.add(province)
+        params.add(true)
+        params.add(description)
+        params.add(effectiveDate)
+        params.add(reductionAmount)
+        params.add(cost)
+        params.add(comments)
+
+        db.updateWithParams(InternalQueries.CREATE_ARO_PLAN, params) {
+            if (it.succeeded())
+                context.response().endWithJson(JsonObject().put("status", "success").put("results", it.result().keys))
+            else
+                sendError(500, context.response(), it.cause())
+        }
+    }
+
+    val handleGetAroPlans = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray().add(context.request().getParam("province_id").toInt())
+
+        db.queryWithParams(InternalQueries.GET_ARO_PLANS, params) {
+            if (it.succeeded())
+                context.response().endWithJson(it.result().rows)
+            else
+                sendError(500, context.response(), it.cause())
+        }
+
+    }
+
+    val handleDeleteAroPlan = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray()
+
+        val id = context.request().formAttributes().get("id")
+
+        params.add(id.toInt())
+
+        db.updateWithParams(InternalQueries.DELETE_ARO_PLAN, params) {
+            if (it.succeeded())
+                context.response().endWithJson(JsonObject().put("status", "success"))
+            else
+                sendError(500, context.response(), it.cause())
         }
     }
 }

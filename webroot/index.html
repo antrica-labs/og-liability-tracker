@@ -57,6 +57,25 @@
         <br />
 
         <fieldset>
+            <legend>Create ARO plan</legend>
+
+            <form action="/api/create_aro_plan" method="post">
+                <ul>
+                    <li><label for="txt_aro_description">Description:</label> <input type="text" id="txt_aro_description" name="description" /></li>
+                    <li><label for="txt_aro_province">Province:</label> <input type="text" id="txt_aro_province" name="province_id" /></li>
+                    <li><label for="txt_aro_effective_date">Effective date:</label> <input type="text" id="txt_aro_effective_date" name="effective_date" /></li>
+                    <li><label for="txt_aro_reduction_amount">Liability reduction amount:</label> <input type="text" id="txt_aro_reduction_amount" name="reduction_amount" /></li>
+                    <li><label for="txt_aro_cost">Cost:</label> <input type="text" id="txt_aro_cost" name="cost" /></li>
+                    <li><label for="txt_aro_comments">Comments:</label> <textarea id="txt_aro_comments" name="comments" ></textarea></li>
+                </ul>
+
+                <button type="submit">Submit</button>
+            </form>
+        </fieldset>
+
+        <br />
+
+        <fieldset>
             <legend>Export monthly report</legend>
 
             <form action="/api/export_liabilities" method="post" enctype="multipart/form-data">

@@ -15,13 +15,14 @@ class InternalQueries {
         val INSERT_HIERARCHY_LOOKUP = "INSERT INTO hierarchy_lookup (type, licence, hierarchy_value) VALUES (?, ?, ?)"
         val DELETE_HIERARCHY_LOOKUPS = "DELETE FROM hierarchy_lookup"
 
-        val INSERT_DISPOSITION = "INSERT INTO dispositions (active, description, effective_date, sale_price) VALUES (?, ?, ?, ?)"
-        val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (province_id, disposition_id, type, licence) VALUES (?, ?, ?, ?)"
+        val INSERT_DISPOSITION = "INSERT INTO dispositions (province_id, active, description, effective_date, sale_price) VALUES (?, ?, ?, ?, ?)"
+        val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (disposition_id, type, licence) VALUES (?, ?, ?)"
         val DELETE_DISPOSITION_ENTITIES = "DELETE FROM disposed_entities WHERE disposition_id = ?"
         val DELETE_DISPOSITION = "DELETE FROM dispositions WHERE id = ?"
         val GET_DISPOSITIONS = """
             SELECT
               d.id,
+              d.province_id,
               d.active,
               d.description,
               d.effective_date,
@@ -31,6 +32,8 @@ class InternalQueries {
               dispositions d INNER JOIN
               disposed_entities de
                 ON de.disposition_id = d.id
+            WHERE
+              province_id = ?
             GROUP BY
               d.id,
               d.active,
@@ -131,5 +134,10 @@ class InternalQueries {
                   AND e.province_id = ?
             ORDER BY h.hierarchy_value, e.licence
         """
+
+        val GET_ARO_PLANS = "SELECT * FROM aro_plans WHERE province_id = ? ORDER BY effective_date"
+        val CREATE_ARO_PLAN = "INSERT INTO aro_plans (province_id, active, description, effective_date, reduction_amount, cost, comments) values (?, ?, ?, ?, ?, ?, ?)"
+        val DELETE_ARO_PLAN = "DELETE FROM aro_plans WHERE id = ?"
+
     }
 }
