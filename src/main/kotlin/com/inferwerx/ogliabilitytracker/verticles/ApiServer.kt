@@ -93,23 +93,24 @@ class ApiServer : AbstractVerticle() {
 
         // Setup APIs
         route(HttpMethod.GET,  "/api/provinces").handler(handleGetProvinces)
-        route(HttpMethod.GET,  "/api/historical_lmr").handler(handleHistoricalRatings)
-        route(HttpMethod.GET,  "/api/pro_forma_lmr").handler(handleProFormaRatings)
-        route(HttpMethod.GET,  "/api/simple_forecasted_lmr").handler(handleSimpleForecastLiabilities)
-        route(HttpMethod.GET,  "/api/combined_forecasted_lrm").handler(handleCombinedForecastLiabilities)
-        route(HttpMethod.GET,  "/api/report_dates").handler(handleReportDates)
+        route(HttpMethod.GET,  "/api/base_lmr_history").handler(handleHistoricalRatings)
+        route(HttpMethod.GET,  "/api/base_pro_forma_lmr_history").handler(handleProFormaRatings)
+        route(HttpMethod.GET,  "/api/base_lmr_forecast").handler(handleBaseForecast)
+        route(HttpMethod.GET,  "/api/combined_lmr_forecast").handler(handleFullInclusionForecast)
+        route(HttpMethod.GET,  "/api/base_report_dates").handler(handleReportDates)
         route(HttpMethod.GET,  "/api/historical_netbacks").handler(handleHistoricalNetbacks)
         route(HttpMethod.GET,  "/api/lmr_details").handler(handleLiabilityDetails)
         route(HttpMethod.POST, "/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route(HttpMethod.POST, "/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
-        route(HttpMethod.POST, "/api/export_liabilities").handler(handleExportLiabilities)
+        route(HttpMethod.POST, "/api/export_historical_report").handler(handleExportLiabilities)
         route(HttpMethod.GET,  "/api/dispositions").handler(handleGetDispositions)
         route(HttpMethod.POST, "/api/create_disposition").handler(handleCreateDisposition)
         route(HttpMethod.POST, "/api/delete_disposition").handler(handleDeleteDisposition)
         route(HttpMethod.GET,  "/api/acquisitions").handler(handleGetAcquisitions)
         route(HttpMethod.POST, "/api/create_acquisition").handler(handleCreateAcquisition)
         route(HttpMethod.POST, "/api/delete_acquisition").handler(handleDeleteAcquisition)
-        route(HttpMethod.GET,  "/api/acquisition_forecast").handler(handleAcquisitionForecast)
+        route(HttpMethod.GET,  "/api/acquisition_lmr_history").handler(handleAcquisitionRatings)
+        route(HttpMethod.GET,  "/api/acquisition_lmr_forecast").handler(handleForecastAcquisition)
         route(HttpMethod.GET,  "/api/aro_plans").handler(handleGetAroPlans)
         route(HttpMethod.POST, "/api/create_aro_plan").handler(handleCreateAroPlan)
         route(HttpMethod.POST, "/api/delete_aro_plan").handler(handleDeleteAroPlan)
@@ -544,7 +545,7 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
-    val handleAcquisitionForecast = Handler<RoutingContext> { context ->
+    val handleAcquisitionRatings = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
         val eb = context.get<EventBus>("eventbus")
         val params = JsonArray()
@@ -566,7 +567,7 @@ class ApiServer : AbstractVerticle() {
 
                     message.put("licences", licences.result().rows)
 
-                    eb.send<String>("og-liability-tracker.public_data_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                    eb.send<String>("og-liability-tracker.public_data_history", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                         if (reply.succeeded())
                             context.response().endWithJson(JsonArray(reply.result().body()))
                         else
@@ -577,7 +578,52 @@ class ApiServer : AbstractVerticle() {
         } catch (t : Throwable) {
             sendError(500, context.response(), t)
         }
+    }
 
+    val handleForecastAcquisition = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val eb = context.get<EventBus>("eventbus")
+        val params = JsonArray()
+
+        params.add(context.request().getParam("id").toInt())
+
+        try {
+            db.queryWithParams(InternalQueries.GET_ACQUISITION_NETBACKS, params) { netbacks ->
+                if (netbacks.failed())
+                    throw netbacks.cause()
+
+                val message = JsonObject()
+
+                message.put("netbacks", netbacks.result().rows)
+
+                db.queryWithParams(InternalQueries.GET_ACQUISITION_LICENCES, params) { licences ->
+                    if (licences.failed())
+                        throw licences.cause()
+
+                    message.put("licences", licences.result().rows)
+
+                    eb.send<String>("og-liability-tracker.public_data_history", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                        if (reply.failed())
+                            throw reply.cause()
+
+                        val forecastMessage = JsonObject()
+
+                        forecastMessage.put("netbacks", netbacks.result().rows)
+                        forecastMessage.put("historical_lmr", JsonArray(reply.result().body()))
+
+                        eb.send<String>("og-liability-tracker.simple_forecaster", forecastMessage.encode(), DeliveryOptions().setSendTimeout(120000)) { forecastReply ->
+                            if (forecastReply.succeeded()) {
+                                context.response().endWithJson(JsonArray(forecastReply.result().body()))
+                            } else {
+                                throw forecastReply.cause()
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (t : Throwable) {
+            sendError(500, context.response(), t)
+        }
     }
 
     /**
@@ -588,7 +634,7 @@ class ApiServer : AbstractVerticle() {
      * Parameters:
      * province_id - Integer ID of a province
      */
-    val handleSimpleForecastLiabilities = Handler<RoutingContext> { context ->
+    val handleBaseForecast = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
         val db = context.get<SQLConnection>("dbconnection")
 
@@ -637,7 +683,7 @@ class ApiServer : AbstractVerticle() {
      * Parameters:
      * province_id - Integer ID of a province
      */
-    val handleCombinedForecastLiabilities = Handler<RoutingContext> { context ->
+    val handleFullInclusionForecast = Handler<RoutingContext> { context ->
 
     }
 

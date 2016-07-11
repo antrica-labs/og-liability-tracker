@@ -182,7 +182,7 @@ class InternalQueries {
         val GET_ACQUISITION_LICENCES = """
             SELECT
               l.id,
-              p.short_name AS province,
+              p.short_name AS province_short_name,
               l.type,
               l.licence,
               l.liability_amount

@@ -7,7 +7,7 @@ import com.inferwerx.ogliabilitytracker.verticles.workers.importers.DispositionI
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.HierarchyImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.DetailedReportExporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.HistoricalRatingsForecaster
-import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.PublicDataForecaster
+import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.PublicDataHistory
 import com.inferwerx.ogliabilitytracker.verticles.workers.util.DatabaseScriptRunner
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.CompositeFuture
@@ -49,7 +49,7 @@ class Main : AbstractVerticle() {
         verticleFutures.add(deployWorker(HistoricalRatingsForecaster(), workerDeploymentOptions))
         verticleFutures.add(deployWorker(DetailedReportExporter(), workerDeploymentOptions))
         verticleFutures.add(deployWorker(AcquisitionImporter(), workerDeploymentOptions))
-        verticleFutures.add(deployWorker(PublicDataForecaster(), workerDeploymentOptions))
+        verticleFutures.add(deployWorker(PublicDataHistory(), workerDeploymentOptions))
 
         try {
             // The API server should only start if all of the worker verticles have started

@@ -47,7 +47,10 @@ class HistoricalRatingsForecaster : AbstractVerticle() {
             report.put("report_date", lastMonth.plusMonths(i.toLong()).toInstant(ZoneOffset.UTC))
             report.put("asset_value", previous.getDouble("asset_value") * (1 + decline))
             report.put("liability_value", constantLiabilityValue)
-            report.put("rating", report.getDouble("asset_value") / report.getDouble("liability_value"))
+            if (report.getDouble("liability_value") == 0.0)
+                report.put("rating", 0.0)
+            else
+                report.put("rating", report.getDouble("asset_value") / report.getDouble("liability_value"))
             report.put("deposit", report.getDouble("asset_value") - report.getDouble("liability_value"))
 
             previous = report
