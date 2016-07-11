@@ -109,6 +109,7 @@ class ApiServer : AbstractVerticle() {
         route(HttpMethod.GET,  "/api/acquisitions").handler(handleGetAcquisitions)
         route(HttpMethod.POST, "/api/create_acquisition").handler(handleCreateAcquisition)
         route(HttpMethod.POST, "/api/delete_acquisition").handler(handleDeleteAcquisition)
+        route(HttpMethod.GET,  "/api/acquisition_forecast").handler(handleAcquisitionForecast)
         route(HttpMethod.GET,  "/api/aro_plans").handler(handleGetAroPlans)
         route(HttpMethod.POST, "/api/create_aro_plan").handler(handleCreateAroPlan)
         route(HttpMethod.POST, "/api/delete_aro_plan").handler(handleDeleteAroPlan)
@@ -541,6 +542,42 @@ class ApiServer : AbstractVerticle() {
             else
                 sendError(500, context.response(), it.cause())
         }
+    }
+
+    val handleAcquisitionForecast = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val eb = context.get<EventBus>("eventbus")
+        val params = JsonArray()
+
+        params.add(context.request().getParam("id").toInt())
+
+        try {
+            db.queryWithParams(InternalQueries.GET_ACQUISITION_NETBACKS, params) { netbacks ->
+                if (netbacks.failed())
+                    throw netbacks.cause()
+
+                val message = JsonObject()
+
+                message.put("netbacks", netbacks.result().rows)
+
+                db.queryWithParams(InternalQueries.GET_ACQUISITION_LICENCES, params) { licences ->
+                    if (licences.failed())
+                        throw licences.cause()
+
+                    message.put("licences", licences.result().rows)
+
+                    eb.send<String>("og-liability-tracker.public_data_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                        if (reply.succeeded())
+                            context.response().endWithJson(JsonArray(reply.result().body()))
+                        else
+                            throw reply.cause()
+                    }
+                }
+            }
+        } catch (t : Throwable) {
+            sendError(500, context.response(), t)
+        }
+
     }
 
     /**

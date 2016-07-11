@@ -49,6 +49,7 @@ class Main : AbstractVerticle() {
         verticleFutures.add(deployWorker(HistoricalRatingsForecaster(), workerDeploymentOptions))
         verticleFutures.add(deployWorker(DetailedReportExporter(), workerDeploymentOptions))
         verticleFutures.add(deployWorker(AcquisitionImporter(), workerDeploymentOptions))
+        verticleFutures.add(deployWorker(PublicDataForecaster(), workerDeploymentOptions))
 
         try {
             // The API server should only start if all of the worker verticles have started

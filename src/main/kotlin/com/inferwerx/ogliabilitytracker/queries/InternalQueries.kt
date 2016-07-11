@@ -168,5 +168,30 @@ class InternalQueries {
               a.effective_date,
               a.purchase_price
         """
+        val GET_ACQUISITION_NETBACKS = """
+            SELECT
+              n.effective_date,
+              n.netback,
+              n.shrinkage_factor,
+              n.oil_equivalent_conversion
+            FROM historical_netbacks n INNER JOIN provinces p ON n.province_id = p.id
+              INNER JOIN acquisitions a ON a.province_id = p.id
+            WHERE a.id = ?
+            ORDER BY n.effective_date ASC
+        """
+        val GET_ACQUISITION_LICENCES = """
+            SELECT
+              l.id,
+              p.short_name AS province,
+              l.type,
+              l.licence,
+              l.liability_amount
+            FROM acquisition_licences l INNER JOIN acquisitions a ON a.id = l.acquisition_id
+              INNER JOIN provinces p ON p.id = a.province_id
+            WHERE l.acquisition_id = ?
+        """
+
+
+
     }
 }
