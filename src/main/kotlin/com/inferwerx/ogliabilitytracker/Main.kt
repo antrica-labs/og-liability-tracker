@@ -1,11 +1,13 @@
 package com.inferwerx.ogliabilitytracker
 
 import com.inferwerx.ogliabilitytracker.verticles.ApiServer
+import com.inferwerx.ogliabilitytracker.verticles.workers.importers.AcquisitionImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.AlbertaLiabilityImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.DispositionImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.importers.HierarchyImporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.DetailedReportExporter
 import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.HistoricalRatingsForecaster
+import com.inferwerx.ogliabilitytracker.verticles.workers.liabilities.PublicDataForecaster
 import com.inferwerx.ogliabilitytracker.verticles.workers.util.DatabaseScriptRunner
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.CompositeFuture
@@ -39,26 +41,16 @@ class Main : AbstractVerticle() {
         val apiDeploymentOptions = DeploymentOptions().setConfig(config())
         val workerDeploymentOptions = DeploymentOptions().setWorker(true).setConfig(config())
 
-        verticleFutures.push(Future.future<Any>())
-        deployWorker(DatabaseScriptRunner(), workerDeploymentOptions, verticleFutures.peek())
-
-        verticleFutures.push(Future.future<Any>())
-        deployWorker(AlbertaLiabilityImporter(), workerDeploymentOptions, verticleFutures.peek())
-
-        verticleFutures.push(Future.future<Any>())
-        deployWorker(HierarchyImporter(), workerDeploymentOptions, verticleFutures.peek())
-
-        verticleFutures.push(Future.future<Any>())
-        deployWorker(DispositionImporter(), workerDeploymentOptions, verticleFutures.peek())
-
-        verticleFutures.push(Future.future<Any>())
-        deployWorker(HistoricalRatingsForecaster(), workerDeploymentOptions, verticleFutures.peek())
-
-        verticleFutures.push(Future.future<Any>())
-        deployWorker(DetailedReportExporter(), workerDeploymentOptions, verticleFutures.peek())
+        // Deploy all of the worker verticles
+        verticleFutures.add(deployWorker(DatabaseScriptRunner(), workerDeploymentOptions))
+        verticleFutures.add(deployWorker(AlbertaLiabilityImporter(), workerDeploymentOptions))
+        verticleFutures.add(deployWorker(HierarchyImporter(), workerDeploymentOptions))
+        verticleFutures.add(deployWorker(DispositionImporter(), workerDeploymentOptions))
+        verticleFutures.add(deployWorker(HistoricalRatingsForecaster(), workerDeploymentOptions))
+        verticleFutures.add(deployWorker(DetailedReportExporter(), workerDeploymentOptions))
 
         try {
-            // The API server should only start if the worker verticles started
+            // The API server should only start if all of the worker verticles have started
             CompositeFuture.all(verticleFutures).setHandler {
                 if (it.failed())
                     throw it.cause()
@@ -148,12 +140,16 @@ class Main : AbstractVerticle() {
         }
     }
 
-    private fun deployWorker(verticle : AbstractVerticle, options : DeploymentOptions, future : Future<Any>) {
+    private fun deployWorker(verticle : AbstractVerticle, options : DeploymentOptions) : Future<Any> {
+        val future = Future.future<Any>()
+
         vertx.deployVerticle(verticle, options) {
             if (it.failed())
                 future.fail(it.cause())
             else
                 future.complete()
         }
+
+        return future
     }
 }
