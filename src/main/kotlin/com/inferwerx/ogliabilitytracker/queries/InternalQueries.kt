@@ -80,7 +80,7 @@ class InternalQueries {
                     ON d.id = de.disposition_id
                 WHERE
                   d.active = 1
-                  AND de.province_id = ?
+                  AND d.province_id = ?
               )
               AND e.province_id = ?
             GROUP BY

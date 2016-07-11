@@ -18,3 +18,4 @@ CREATE TABLE entity_ratings (
 );
 
 CREATE INDEX entity_ratings_fk_idx ON entity_ratings(entity_id);
+CREATE INDEX entity_ratings_date_idx ON entity_ratings(report_date);

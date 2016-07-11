@@ -594,12 +594,15 @@ class ApiServer : AbstractVerticle() {
 
         val province = context.request().getParam("province_id").toInt()
 
+        val netbackParams = JsonArray()
+        netbackParams.add(province)
+
         val lmrParams = JsonArray()
         lmrParams.add(province)
         lmrParams.add(province)
 
         try {
-            db.query(InternalQueries.GET_NETBACKS) { netback ->
+            db.queryWithParams(InternalQueries.GET_NETBACKS, netbackParams) { netback ->
                 if (netback.failed())
                     throw Throwable(netback.cause())
 
