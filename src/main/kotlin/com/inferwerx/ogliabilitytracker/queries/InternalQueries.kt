@@ -48,8 +48,7 @@ class InternalQueries {
               r.report_date,
               sum(r.asset_value)                          AS asset_value,
               sum(r.liability_value)                      AS liability_value,
-              sum(r.asset_value) / sum(r.liability_value) AS rating,
-              sum(r.asset_value) - sum(r.liability_value) AS deposit
+              sum(r.asset_value) - sum(r.liability_value) AS net_value
             FROM
               entity_ratings r INNER JOIN
               entities e
@@ -94,8 +93,7 @@ class InternalQueries {
               r.report_date,
               sum(r.asset_value)                AS asset_value,
               sum(r.liability_value)            AS liability_value,
-              sum(r.asset_value) / sum(r.liability_value) AS rating,
-              sum(r.asset_value) - sum(r.liability_value) AS deposit
+              sum(r.asset_value) - sum(r.liability_value) AS net_value
             FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
             WHERE e.province_id = ?
             GROUP BY r.report_date
