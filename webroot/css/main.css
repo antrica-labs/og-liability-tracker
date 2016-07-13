@@ -1,0 +1,26 @@
+body {
+    min-height: 2000px;
+    padding-top: 70px;
+}
+
+#lmr_toggles {
+    margin-top: 20px;
+}
+
+.toggle-list .btn-default {
+    width: 100%
+}
+
+.toggle-list ul.toggles {
+    margin: 10px 0px;
+    padding: 0;
+    list-style-type: none;
+}
+
+.toggle-list ul.toggles li.optional {
+    margin-bottom: 10px;
+}
+
+.toggle-list ul.toggles li.optional a.delete {
+    color: #ad5755;
+}
