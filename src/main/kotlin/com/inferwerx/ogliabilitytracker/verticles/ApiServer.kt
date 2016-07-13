@@ -97,11 +97,13 @@ class ApiServer : AbstractVerticle() {
         route(HttpMethod.GET,  "/api/base_pro_forma_lmr_history").handler(handleProFormaRatings)
         route(HttpMethod.GET,  "/api/base_lmr_forecast").handler(handleBaseForecast)
         route(HttpMethod.GET,  "/api/combined_lmr_forecast").handler(handleFullInclusionForecast)
-        route(HttpMethod.GET,  "/api/base_report_dates").handler(handleReportDates)
+        route(HttpMethod.GET,  "/api/report_dates").handler(handleReportDates)
+        route(HttpMethod.GET,  "/api/latest_report_date").handler(handleLatestReportDate)
         route(HttpMethod.GET,  "/api/historical_netbacks").handler(handleHistoricalNetbacks)
         route(HttpMethod.GET,  "/api/lmr_details").handler(handleLiabilityDetails)
         route(HttpMethod.POST, "/api/upload_ab_liabilities").handler(handleAbLiabilityUpload)
         route(HttpMethod.POST, "/api/upload_hierarchy_mapping").handler(handleHierarchyMappingUpload)
+        route(HttpMethod.GET,  "/api/export_historical_report").handler(handleExportLiabilities)
         route(HttpMethod.POST, "/api/export_historical_report").handler(handleExportLiabilities)
         route(HttpMethod.GET,  "/api/dispositions").handler(handleGetDispositions)
         route(HttpMethod.POST, "/api/create_disposition").handler(handleCreateDisposition)
@@ -247,6 +249,29 @@ class ApiServer : AbstractVerticle() {
         params.add(province.toInt())
 
         db.queryWithParams(InternalQueries.GET_REPORT_DATES, params) { query ->
+            if (query.failed())
+                sendError(500, context.response(), query.cause())
+            else
+                context.response().endWithJson(query.result().rows)
+        }
+    }
+
+    /**
+     * Returns the most recent report that has been uploaded to the database
+     *
+     * Parameters:
+     * province_id - Integer ID of a province
+     */
+    val handleLatestReportDate = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+
+        val province = context.request().getParam("province_id")
+
+        val params = JsonArray()
+
+        params.add(province.toInt())
+
+        db.queryWithParams(InternalQueries.GET_LATEST_REPORT, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
@@ -698,25 +723,32 @@ class ApiServer : AbstractVerticle() {
         val eb = context.get<EventBus>("eventbus")
         val future = Future.future<String>()
 
+        val province = context.request().getParam("province_id")
+        val reportDateStr = context.request().getParam("report_date")
+
+        val message = JsonObject()
+                .put("province", province.toInt())
+                .put("report_date", reportDateStr)
+
+
         if (context.fileUploads().count() > 0) {
             val upload = context.fileUploads().toTypedArray()[0]
-            val province = context.request().getParam("province_id")
-            val reportDateStr = context.request().getParam("report_date")
-            val message = JsonObject()
-                    .put("province", province.toInt())
-                    .put("report_date", reportDateStr)
-                    .put("filename", upload.uploadedFileName())
-                    .put("originalFilename", upload.fileName())
 
-            eb.send<String>("og-liability-tracker.liability_exporter", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
-                if (reply.succeeded()) {
-                    future.complete(reply.result().body())
-                } else {
-                    future.fail(reply.cause())
-                }
-            }
+            message.put("filename", upload.uploadedFileName())
+            message.put("originalFilename", upload.fileName())
         } else {
-            future.complete()
+            val path = "./webroot/resources/ab-llr-template.xlsx"
+
+            message.put("filename", path)
+            message.put("originalFilename", path)
+        }
+
+        eb.send<String>("og-liability-tracker.liability_exporter", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+            if (reply.succeeded()) {
+                future.complete(reply.result().body())
+            } else {
+                future.fail(reply.cause())
+            }
         }
 
         future.setHandler {

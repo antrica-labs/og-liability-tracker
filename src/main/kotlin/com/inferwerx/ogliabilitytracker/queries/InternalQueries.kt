@@ -107,6 +107,12 @@ class InternalQueries {
             ORDER BY report_date DESC
         """
 
+        val GET_LATEST_REPORT = """
+            SELECT max(report_date) as report_date
+            FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
+            WHERE e.province_id = ?
+        """
+
         val GET_NETBACKS = "SELECT effective_date, netback, shrinkage_factor, oil_equivalent_conversion FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date ASC"
 
         val GET_REPORT_DETAILS = """
