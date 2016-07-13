@@ -709,6 +709,72 @@ class ApiServer : AbstractVerticle() {
      * province_id - Integer ID of a province
      */
     val handleFullInclusionForecast = Handler<RoutingContext> { context ->
+        val eb = context.get<EventBus>("eventbus")
+        val db = context.get<SQLConnection>("dbconnection")
+
+        val province = context.request().getParam("province_id").toInt()
+
+        val netbackParams = JsonArray()
+        netbackParams.add(province)
+
+        val lmrParams = JsonArray()
+        lmrParams.add(province)
+        lmrParams.add(province)
+
+        try {
+            db.queryWithParams(InternalQueries.GET_NETBACKS, netbackParams) { netback ->
+                if (netback.failed())
+                    throw Throwable(netback.cause())
+
+                val message = JsonObject()
+
+                message.put("netbacks", netback.result().rows)
+
+                db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, lmrParams) { lmr ->
+                    if (lmr.failed())
+                        throw Throwable(lmr.cause())
+
+                    message.put("historical_lmr", lmr.result().rows)
+
+                    eb.send<String>("og-liability-tracker.simple_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                        if (reply.succeeded()) {
+                            val combined = JsonArray()
+
+                            for (record in lmr.result().rows) {
+                                val entry = JsonObject()
+
+                                entry.put("report_date", record.getInstant("report_date"))
+                                entry.put("asset_value", record.getDouble("asset_value"))
+                                entry.put("liability_value", record.getDouble("liability_value"))
+                                entry.put("net_value", record.getDouble("net_value"))
+                                entry.put("type", "Historical")
+
+                                combined.add(entry)
+                            }
+
+                            for (obj in JsonArray(reply.result().body())) {
+                                val record = obj as JsonObject
+                                val entry = JsonObject()
+
+                                entry.put("report_date", record.getInstant("report_date"))
+                                entry.put("asset_value", record.getDouble("asset_value"))
+                                entry.put("liability_value", record.getDouble("liability_value"))
+                                entry.put("net_value", record.getDouble("net_value"))
+                                entry.put("type", "Forecast")
+
+                                combined.add(entry)
+                            }
+
+                            context.response().endWithJson(combined)
+                        } else {
+                            throw reply.cause()
+                        }
+                    }
+                }
+            }
+        } catch (t : Throwable) {
+            sendError(500, context.response(), t)
+        }
 
     }
 

@@ -1,4 +1,6 @@
-var netValueData = {
+var PROVINCE = 1
+
+var netValueDataOrig = {
     labels: ["January", "February", "March", "April", "May", "June", "July", "August", "September"],
     datasets: [
         {
@@ -40,7 +42,7 @@ var LmrOverview = React.createClass({
     render: function() {
         return (
             <div>
-                <NetLmrGraph id="netLmrGraph" data={netValueData} options={netValueOptions} />
+                <NetLmrGraph id="netLmrGraph" options={netValueOptions} url={"/api/combined_lmr_forecast?province_id=" + PROVINCE} />
                 <LmrInputs />
             </div>
         );
@@ -51,14 +53,82 @@ var NetLmrGraph = React.createClass({
     getIntialState: function() {
         return { data: [], options: [] };
     },
-    componentDidMount: function() {
-        var canvas = this.refs.chartCanvas;
+    getLabelsFromLmrData: function (lmrData) {
+        var labels = [];
 
-        var chart = new Chart(canvas, {
-            type: 'line',
-            display: false,
-            data: this.props.data,
-            options: this.props.options
+        for (var index = 0; index < lmrData.length; index++) {
+            var reportDate = moment(lmrData[index].report_date);
+
+            labels.push(reportDate.format("MMMM YYYY"));
+        }
+
+        return labels
+    },
+    getPointsFromLmrData: function(lmrData) {
+        var historical = [];
+        var forecast = [];
+
+        for (var index = 0; index < lmrData.length; index++) {
+            var assetValue = lmrData[index].asset_value;
+            var liabilityAmount = lmrData[index].liability_value;
+
+            if (lmrData[index].type === "Historical") {
+                historical.push(assetValue - liabilityAmount);
+                forecast.push(null);
+            } else {
+                forecast.push(assetValue - liabilityAmount)
+            }
+        }
+
+        return {
+            historical: historical,
+            forecast: forecast
+        };
+    },
+    componentDidMount: function() {
+        $.ajax({
+            url: this.props.url,
+            dataType: 'json',
+            cache: false,
+            success: function(lmr) {
+                var labels = this.getLabelsFromLmrData(lmr);
+                var data = this.getPointsFromLmrData(lmr);
+
+                // Set the first forecast to be the same as the last history data point in order to connect the graph
+                data.forecast[data.historical.length - 1] = data.historical[data.historical.length - 1];
+
+                var netValueData = {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Historical",
+                            fill: false,
+                            backgroundColor: "#CDA694",
+                            borderColor: "#AD5755",
+                            data: data.historical
+                        },
+                        {
+                            label: "Forecast",
+                            fill: false,
+                            backgroundColor: "#91D8D8",
+                            borderColor: "#52B2C0",
+                            data: data.forecast
+                        }
+                    ]
+                };
+
+                var canvas = this.refs.chartCanvas;
+
+                var chart = new Chart(canvas, {
+                    type: 'line',
+                    display: false,
+                    data: netValueData,
+                    options: this.props.options
+                });
+            }.bind(this),
+            error: function(xhr, status, err) {
+                console.error(this.props.url, status, err.toString());
+            }.bind(this)
         });
     },
     loadGraph: function() {
