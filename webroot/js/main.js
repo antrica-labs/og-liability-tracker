@@ -42,7 +42,7 @@ var LmrOverview = React.createClass({
     render: function() {
         return (
             <div>
-                <NetLmrGraph id="netLmrGraph" options={netValueOptions} url={"/api/combined_lmr_forecast?province_id=" + PROVINCE} />
+                <NetLmrGraph id="netLmrGraph" options={netValueOptions} url={"/api/combined_lmr_trend?province_id=" + PROVINCE} />
                 <LmrInputs />
             </div>
         );
@@ -146,8 +146,8 @@ var LmrInputs = React.createClass({
         return (
             <div id="lmr_toggles">
                 <div className="row">
-                    <AcquisitionList />
                     <DivestmentList />
+                    <AcquisitionList />
                     <GrowthProjectsList />
                     <AroList />
                 </div>
@@ -168,14 +168,14 @@ var AcquisitionList = React.createClass({
                     <li className="optional">
                         <div className="input-group">
                             <span className="input-group-addon"><input type="checkbox" className="activation" /></span>
-                            <input type="text" className="form-control" value="Non-Op buy out" readOnly="true" />
+                            <input type="text" className="form-control" value="Non-Op Buy Outs" readOnly="true" />
                             <span className="input-group-addon"><a href="#" className="delete"><span className="glyphicon glyphicon-remove"></span></a></span>
                         </div>
                     </li>
                     <li className="optional">
                         <div className="input-group">
                             <span className="input-group-addon"><input type="checkbox" className="activation" /></span>
-                            <input type="text" className="form-control" value="Granite Wash" readOnly="true" />
+                            <input type="text" className="form-control" value="Shadow Creek Project" readOnly="true" />
                             <span className="input-group-addon"><a href="#" className="delete"><span className="glyphicon glyphicon-remove"></span></a></span>
                         </div>
                     </li>

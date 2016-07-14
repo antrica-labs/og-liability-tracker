@@ -2,6 +2,7 @@ package com.inferwerx.ogliabilitytracker.verticles
 
 import com.inferwerx.ogliabilitytracker.queries.InternalQueries
 import io.vertx.core.AbstractVerticle
+import io.vertx.core.CompositeFuture
 import io.vertx.core.Future
 import io.vertx.core.Handler
 import io.vertx.core.eventbus.DeliveryOptions
@@ -20,7 +21,6 @@ import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.StaticHandler
 import org.h2.jdbc.JdbcSQLException
 import java.io.File
-import java.net.InterfaceAddress
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -96,7 +96,7 @@ class ApiServer : AbstractVerticle() {
         route(HttpMethod.GET,  "/api/base_lmr_history").handler(handleHistoricalRatings)
         route(HttpMethod.GET,  "/api/base_pro_forma_lmr_history").handler(handleProFormaRatings)
         route(HttpMethod.GET,  "/api/base_lmr_forecast").handler(handleBaseForecast)
-        route(HttpMethod.GET,  "/api/combined_lmr_forecast").handler(handleFullInclusionForecast)
+        route(HttpMethod.GET,  "/api/combined_lmr_trend").handler(handleFullInclusionTrend)
         route(HttpMethod.GET,  "/api/report_dates").handler(handleReportDates)
         route(HttpMethod.GET,  "/api/latest_report_date").handler(handleLatestReportDate)
         route(HttpMethod.GET,  "/api/historical_netbacks").handler(handleHistoricalNetbacks)
@@ -113,6 +113,7 @@ class ApiServer : AbstractVerticle() {
         route(HttpMethod.POST, "/api/delete_acquisition").handler(handleDeleteAcquisition)
         route(HttpMethod.GET,  "/api/acquisition_lmr_history").handler(handleAcquisitionRatings)
         route(HttpMethod.GET,  "/api/acquisition_lmr_forecast").handler(handleForecastAcquisition)
+        route(HttpMethod.GET,  "/api/acquisition_lmr_trend").handler(handleFullAcquisitionsTrend)
         route(HttpMethod.GET,  "/api/aro_plans").handler(handleGetAroPlans)
         route(HttpMethod.POST, "/api/create_aro_plan").handler(handleCreateAroPlan)
         route(HttpMethod.POST, "/api/delete_aro_plan").handler(handleDeleteAroPlan)
@@ -651,6 +652,87 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+    var handleFullAcquisitionsTrend = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val eb = context.get<EventBus>("eventbus")
+        val params = JsonArray()
+
+        params.add(context.request().getParam("province_id").toInt())
+
+        try {
+            db.queryWithParams(InternalQueries.GET_NETBACKS, params) { netbackQuery ->
+                if (netbackQuery.failed())
+                    throw netbackQuery.cause()
+
+                val netbacks = JsonArray(netbackQuery.result().rows)
+
+                val message = JsonObject()
+
+                message.put("netbacks", netbacks)
+
+                db.queryWithParams(InternalQueries.GET_ACTIVE_ACQUISITION_LICENCES, params) { licenceQuery ->
+                    if (licenceQuery.failed())
+                        throw licenceQuery.cause()
+
+                    val licences = JsonArray(licenceQuery.result().rows)
+
+                    message.put("licences", licences)
+
+                    eb.send<String>("og-liability-tracker.public_data_history", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                        if (reply.failed())
+                            throw reply.cause()
+
+                        val forecastMessage = JsonObject()
+
+                        val historical = JsonArray(reply.result().body())
+                        
+                        forecastMessage.put("netbacks", netbacks)
+                        forecastMessage.put("historical_lmr", historical)
+
+                        eb.send<String>("og-liability-tracker.simple_forecaster", forecastMessage.encode(), DeliveryOptions().setSendTimeout(120000)) { forecastReply ->
+                            if (forecastReply.failed()) 
+                                throw forecastReply.cause()
+
+                            val trend = JsonArray()
+
+                            for (obj in historical) {
+                                val record = obj as JsonObject
+                                val entry = JsonObject()
+
+                                entry.put("report_date", record.getInstant("report_date"))
+                                entry.put("asset_value", record.getDouble("asset_value"))
+                                entry.put("liability_value", record.getDouble("liability_value"))
+                                entry.put("rating", record.getDouble("rating"))
+                                entry.put("net_value", record.getDouble("net_value"))
+                                entry.put("type", "Historical")
+
+                                trend.add(entry)
+                            }
+
+                            for (obj in JsonArray(forecastReply.result().body())) {
+                                val record = obj as JsonObject
+                                val entry = JsonObject()
+
+                                entry.put("report_date", record.getInstant("report_date"))
+                                entry.put("asset_value", record.getDouble("asset_value"))
+                                entry.put("liability_value", record.getDouble("liability_value"))
+                                entry.put("rating", record.getDouble("rating"))
+                                entry.put("net_value", record.getDouble("net_value"))
+                                entry.put("type", "Forecast")
+
+                                trend.add(entry)
+                            }
+
+                            context.response().endWithJson(trend)
+                        }
+                    }
+                }
+            }
+        } catch (t : Throwable) {
+            sendError(500, context.response(), t)
+        }
+    }
+
     /**
      * Forecasts LMR ratings in the future using historical LMR ratings. The forecast starts one month after the last
      * month that an LMR report exists for. This forecast will include dispositions, the only way to forecast their
@@ -702,80 +784,235 @@ class ApiServer : AbstractVerticle() {
     }
 
     /**
-     * The difference between the simple forecast and this combined forecast is the layering in of growth, acquisitions,
-     * remediation and dispositions.
+     * This call build a complete historical and forecast dataset, including all of the adjustments to the forecast
+     * such as aquisitions, ARO work, and (eventually) growth wells.
      *
      * Parameters:
      * province_id - Integer ID of a province
      */
-    val handleFullInclusionForecast = Handler<RoutingContext> { context ->
+    val handleFullInclusionTrend = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
         val db = context.get<SQLConnection>("dbconnection")
 
+        val netbacksFuture = Future.future<JsonArray>()
+        val historyFuture = Future.future<JsonArray>()
+        val baseForecastFuture = Future.future<JsonArray>()
+        val acquisitionForecastFuture = Future.future<JsonArray>()
+        val aroForecastFuture = Future.future<JsonArray>()
+
         val province = context.request().getParam("province_id").toInt()
 
-        val netbackParams = JsonArray()
-        netbackParams.add(province)
+        val provinceParam = JsonArray()
+        provinceParam.add(province)
 
-        val lmrParams = JsonArray()
-        lmrParams.add(province)
-        lmrParams.add(province)
+        // Get netbacks
+        db.queryWithParams(InternalQueries.GET_NETBACKS, provinceParam) { netbackQuery ->
+            if (netbackQuery.failed())
+                netbacksFuture.fail(netbackQuery.cause())
+            else
+                netbacksFuture.complete(JsonArray(netbackQuery.result().rows))
+        }
 
-        try {
-            db.queryWithParams(InternalQueries.GET_NETBACKS, netbackParams) { netback ->
-                if (netback.failed())
-                    throw Throwable(netback.cause())
+        // Get history
+        db.queryWithParams(InternalQueries.GET_HISTORY, provinceParam) { query ->
+            if (query.failed())
+                historyFuture.fail(query.cause())
+            else
+                historyFuture.complete(JsonArray(query.result().rows))
+        }
 
-                val message = JsonObject()
+        // Once we have netbacks we can build forecasts
+        netbacksFuture.setHandler {
+            if (it.failed()) {
+                sendError(500, context.response(), it.cause())
+            } else {
+                val netbacks = it.result()
 
-                message.put("netbacks", netback.result().rows)
+                // Get base forecast
+                db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, JsonArray().add(provinceParam.getValue(0)).add(provinceParam.getValue(0))) { lmr ->
+                    if (lmr.failed()) {
+                        baseForecastFuture.fail(lmr.cause())
+                    } else {
+                        val message = JsonObject()
+                        message.put("netbacks", netbacks)
+                        message.put("historical_lmr", lmr.result().rows)
 
-                db.queryWithParams(InternalQueries.GET_PROFORMA_HISTORY, lmrParams) { lmr ->
-                    if (lmr.failed())
-                        throw Throwable(lmr.cause())
+                        eb.send<String>("og-liability-tracker.simple_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                            if (reply.failed())
+                                baseForecastFuture.fail(reply.cause())
+                            else
+                                baseForecastFuture.complete(JsonArray(reply.result().body()))
+                        }
+                    }
+                }
 
-                    message.put("historical_lmr", lmr.result().rows)
+                // Get acquisition forecast
+                db.queryWithParams(InternalQueries.GET_ACTIVE_ACQUISITIONS, provinceParam) { acqQuery ->
+                    if (acqQuery.failed()) {
+                        acquisitionForecastFuture.fail(acqQuery.cause())
+                    } else {
+                        val totalPackages = acqQuery.result().numRows
+                        val processed = JsonArray()
 
-                    eb.send<String>("og-liability-tracker.simple_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
-                        if (reply.succeeded()) {
-                            val combined = JsonArray()
+                        try {
+                            for (row in acqQuery.result().rows) {
+                                db.queryWithParams(InternalQueries.GET_ACTIVE_ACQUISITION_LICENCES, provinceParam) { licenceQuery ->
+                                    if (licenceQuery.failed())
+                                        throw licenceQuery.cause()
 
-                            for (record in lmr.result().rows) {
-                                val entry = JsonObject()
+                                    if (licenceQuery.result().numRows > 0) {
+                                        // all rows will have the same effective date, so grab the first one
+                                        val effectiveDate = licenceQuery.result().rows.get(0).getInstant("effective_date")
 
-                                entry.put("report_date", record.getInstant("report_date"))
-                                entry.put("asset_value", record.getDouble("asset_value"))
-                                entry.put("liability_value", record.getDouble("liability_value"))
-                                entry.put("net_value", record.getDouble("net_value"))
-                                entry.put("type", "Historical")
+                                        val message = JsonObject()
+                                        message.put("netbacks", netbacks)
+                                        message.put("licences", licenceQuery.result().rows)
 
-                                combined.add(entry)
+                                        eb.send<String>("og-liability-tracker.public_data_history", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                                            if (reply.failed())
+                                                throw licenceQuery.cause()
+
+                                            val forecastMessage = JsonObject()
+
+                                            forecastMessage.put("netbacks", netbacks)
+                                            forecastMessage.put("historical_lmr", JsonArray(reply.result().body()))
+
+                                            eb.send<String>("og-liability-tracker.simple_forecaster", forecastMessage.encode(), DeliveryOptions().setSendTimeout(120000)) { forecastReply ->
+                                                if (forecastReply.failed())
+                                                    throw forecastReply.cause()
+
+                                                val forecast = JsonArray()
+
+                                                for (obj in JsonArray(forecastReply.result().body())) {
+                                                    val record = obj as JsonObject
+                                                    val reportDate = record.getInstant("report_date")
+
+                                                    if (reportDate.compareTo(effectiveDate) >= 0)
+                                                        forecast.add(record)
+                                                }
+
+                                                processed.add(forecast)
+
+                                                if (processed.size() == totalPackages)
+                                                    acquisitionForecastFuture.complete(processed)
+                                            }
+                                        }
+                                    }
+                                }
+
                             }
-
-                            for (obj in JsonArray(reply.result().body())) {
-                                val record = obj as JsonObject
-                                val entry = JsonObject()
-
-                                entry.put("report_date", record.getInstant("report_date"))
-                                entry.put("asset_value", record.getDouble("asset_value"))
-                                entry.put("liability_value", record.getDouble("liability_value"))
-                                entry.put("net_value", record.getDouble("net_value"))
-                                entry.put("type", "Forecast")
-
-                                combined.add(entry)
-                            }
-
-                            context.response().endWithJson(combined)
-                        } else {
-                            throw reply.cause()
+                        } catch (t : Throwable) {
+                            acquisitionForecastFuture.fail(t)
                         }
                     }
                 }
             }
-        } catch (t : Throwable) {
-            sendError(500, context.response(), t)
         }
 
+        // Get ARO reductions
+        db.queryWithParams(InternalQueries.GET_ARO_PLANS, provinceParam) { aroQuery ->
+            if (aroQuery.failed())
+                aroForecastFuture.fail(aroQuery.cause())
+            else
+                aroForecastFuture.complete(JsonArray(aroQuery.result().rows))
+        }
+
+        CompositeFuture.all(historyFuture, baseForecastFuture, acquisitionForecastFuture, aroForecastFuture).setHandler { futures ->
+            if (futures.failed()) {
+                sendError(500, context.response(), futures.cause())
+            } else {
+                val history = futures.result().result<JsonArray>(0)
+                val forecast = futures.result().result<JsonArray>(1)
+                val acquisitions = futures.result().result<JsonArray>(2)
+                val aro = futures.result().result<JsonArray>(3)
+
+                val combined = JsonArray()
+
+                for (obj in history) {
+                    val record = obj as JsonObject
+                    val entry = JsonObject()
+
+                    entry.put("report_date", record.getInstant("report_date"))
+                    entry.put("asset_value", record.getDouble("asset_value"))
+                    entry.put("liability_value", record.getDouble("liability_value"))
+                    entry.put("rating", record.getDouble("rating"))
+                    entry.put("net_value", record.getDouble("net_value"))
+                    entry.put("type", "Historical")
+
+                    combined.add(entry)
+                }
+
+                for (obj in forecast) {
+                    val record = obj as JsonObject
+                    val entry = JsonObject()
+
+                    entry.put("report_date", record.getInstant("report_date"))
+                    entry.put("asset_value", record.getDouble("asset_value"))
+                    entry.put("liability_value", record.getDouble("liability_value"))
+                    entry.put("rating", record.getDouble("rating"))
+                    entry.put("net_value", record.getDouble("net_value"))
+                    entry.put("type", "Forecast")
+
+                    combined.add(entry)
+                }
+
+                // Remove ARO project impact
+                for (obj in aro) {
+                    val record = obj as JsonObject
+
+                    if (record.getBoolean("active")) {
+                        val effectiveDate = record.getInstant("effective_date")
+                        val reduction = record.getDouble("reduction_amount")
+
+                        for (obj2 in combined) {
+                            val entry = obj2 as JsonObject
+
+                            if (entry.getInstant("report_date").compareTo(effectiveDate) >= 0) {
+                                entry.put("liability_value", entry.getDouble("liability_value") - reduction)
+                                entry.put("net_value", entry.getDouble("asset_value") - entry.getDouble("liability_value"))
+
+                                if (entry.getDouble("liability_value") != 0.0)
+                                    entry.put("rating", entry.getDouble("asset_value") / entry.getDouble("liability_value"))
+                                else
+                                    entry.put("rating", 0.0)
+                            }
+                        }
+                    }
+                }
+
+                // Layer in acquisitions
+                for (obj in acquisitions) {
+                    val acquisition = obj as JsonArray
+
+                    if (acquisition.size() < 1)
+                        continue
+
+                    val effectiveDate = (acquisition.getValue(0) as JsonObject).getInstant("report_date")
+                    var step = 0
+
+                    for (obj2 in combined) {
+                        val entry = obj2 as JsonObject
+
+                        if (entry.getInstant("report_date").compareTo(effectiveDate) >= 0 && step < acquisition.size()) {
+                            val incremental = acquisition.getValue(step) as JsonObject
+
+                            entry.put("asset_value", entry.getDouble("asset_value") + incremental.getDouble("asset_value"))
+                            entry.put("liability_value", entry.getDouble("liability_value") + incremental.getDouble("liability_value"))
+                            entry.put("net_value", entry.getDouble("asset_value") - entry.getDouble("liability_value"))
+
+                            if (entry.getDouble("liability_value") != 0.0)
+                                entry.put("rating", entry.getDouble("asset_value") / entry.getDouble("liability_value"))
+                            else
+                                entry.put("rating", 0.0)
+
+                            step++
+                        }
+                    }
+                }
+
+                context.response().endWithJson(combined)
+            }
+        }
     }
 
     /**

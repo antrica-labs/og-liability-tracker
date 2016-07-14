@@ -48,6 +48,7 @@ class InternalQueries {
               r.report_date,
               sum(r.asset_value)                          AS asset_value,
               sum(r.liability_value)                      AS liability_value,
+              CASE WHEN sum(r.liability_value) <> 0 THEN sum(r.asset_value) /  sum(r.liability_value) ELSE 0.0 END as rating,
               sum(r.asset_value) - sum(r.liability_value) AS net_value
             FROM
               entity_ratings r INNER JOIN
@@ -93,6 +94,7 @@ class InternalQueries {
               r.report_date,
               sum(r.asset_value)                AS asset_value,
               sum(r.liability_value)            AS liability_value,
+              CASE WHEN sum(r.liability_value) <> 0 THEN sum(r.asset_value) /  sum(r.liability_value) ELSE 0.0 END as rating,
               sum(r.asset_value) - sum(r.liability_value) AS net_value
             FROM entity_ratings r INNER JOIN entities e ON e.id = r.entity_id
             WHERE e.province_id = ?
@@ -172,6 +174,7 @@ class InternalQueries {
               a.effective_date,
               a.purchase_price
         """
+        val GET_ACTIVE_ACQUISITIONS = "SELECT id, description, effective_date, purchase_price FROM acquisitions WHERE active = 1 AND province_id = ?"
         val GET_ACQUISITION_NETBACKS = """
             SELECT
               n.effective_date,
@@ -194,7 +197,18 @@ class InternalQueries {
               INNER JOIN provinces p ON p.id = a.province_id
             WHERE l.acquisition_id = ?
         """
-
+        val GET_ACTIVE_ACQUISITION_LICENCES = """
+            SELECT
+              l.id,
+              a.effective_date,
+              p.short_name AS province_short_name,
+              l.type,
+              l.licence,
+              l.liability_amount
+            FROM acquisition_licences l INNER JOIN acquisitions a ON a.id = l.acquisition_id
+              INNER JOIN provinces p ON p.id = a.province_id
+            WHERE a.active = 1 AND p.id = ?
+        """
 
 
     }

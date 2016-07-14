@@ -7,9 +7,7 @@ import io.vertx.core.json.JsonObject
 import io.vertx.ext.jdbc.JDBCClient
 import java.sql.Connection
 import java.sql.DriverManager
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
+import java.time.*
 import java.time.temporal.TemporalAdjusters;
 import java.util.*
 
@@ -107,7 +105,7 @@ class PublicDataHistory : AbstractVerticle() {
             volumes.put(rs.getInt(1), months)
         }
 
-        val netbackScopeDate = LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC)
+        val netbackScopeDate = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant()
         var matchingNetbackDate : Instant? = null
         for (k in 0..netbackDates.size - 1) {
             if (netbackScopeDate >= netbackDates[k]) {
@@ -126,7 +124,7 @@ class PublicDataHistory : AbstractVerticle() {
             val calcStartDate = queryStartDate.plusMonths(14)
             for (i in 0..12) {
                 val workingMonth = calcStartDate.plusMonths(i.toLong())
-                val workingDate = workingMonth.atStartOfDay().toInstant(ZoneOffset.UTC)
+                val workingDate = workingMonth.atStartOfDay(ZoneId.systemDefault()).toInstant()
 
                 var assetValue = 0.0
 
@@ -153,7 +151,7 @@ class PublicDataHistory : AbstractVerticle() {
                     record.put("rating", 0.0)
                 else
                     record.put("rating", assetValue / packageLiability)
-                record.put("deposit", assetValue - packageLiability)
+                record.put("net_value", assetValue - packageLiability)
 
                 history.add(record)
             }

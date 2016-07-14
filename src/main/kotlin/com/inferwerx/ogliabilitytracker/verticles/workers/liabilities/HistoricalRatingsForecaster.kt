@@ -51,7 +51,7 @@ class HistoricalRatingsForecaster : AbstractVerticle() {
                 report.put("rating", 0.0)
             else
                 report.put("rating", report.getDouble("asset_value") / report.getDouble("liability_value"))
-            report.put("deposit", report.getDouble("asset_value") - report.getDouble("liability_value"))
+            report.put("net_value", report.getDouble("asset_value") - report.getDouble("liability_value"))
 
             previous = report
             forecast.add(report)
