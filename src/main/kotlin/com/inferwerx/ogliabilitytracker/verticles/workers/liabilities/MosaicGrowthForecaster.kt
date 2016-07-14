@@ -108,12 +108,12 @@ class MosaicGrowthForecaster : AbstractVerticle() {
                         for (obj in it.result()) {
                             val revenueEntity = obj as JsonObject
 
+                            val entity = JsonObject().put("entity_name", revenueEntity.getString("entity_name")).put("forecast", JsonArray())
+
                             var offset = 0
                             var assetValue = 0.0
                             for (obj2 in revenueEntity.getJsonArray("forecast")) {
                                 val record = obj2 as JsonObject
-
-                                val entity = JsonObject().put("entity_name", record.getString("entity_name")).put("forecast", JsonArray())
 
                                 assetValue += record.getDouble("revenue")
 
@@ -129,9 +129,10 @@ class MosaicGrowthForecaster : AbstractVerticle() {
                                     entity.getJsonArray("forecast").add(month)
                                 }
 
-                                forecasts.add(entity)
                                 offset++
                             }
+
+                            forecasts.add(entity)
                         }
 
                         future.complete(JsonObject().put("forecasts", forecasts))
