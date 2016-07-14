@@ -19,6 +19,7 @@ class InternalQueries {
         val INSERT_DISPOSITION_ENTITY = "INSERT INTO disposed_entities (disposition_id, type, licence) VALUES (?, ?, ?)"
         val DELETE_DISPOSITION_ENTITIES = "DELETE FROM disposed_entities WHERE disposition_id = ?"
         val DELETE_DISPOSITION = "DELETE FROM dispositions WHERE id = ?"
+        val TOGGLE_DISPOSITION = "UPDATE dispositions SET active = ? WHERE id = ?"
         val GET_DISPOSITIONS = """
             SELECT
               d.id,
@@ -145,11 +146,13 @@ class InternalQueries {
         val GET_ARO_PLANS = "SELECT id, province_id, active, description, effective_date, reduction_amount, cost, comments FROM aro_plans WHERE province_id = ? ORDER BY effective_date"
         val INSERT_ARO_PLAN = "INSERT INTO aro_plans (province_id, active, description, effective_date, reduction_amount, cost, comments) values (?, ?, ?, ?, ?, ?, ?)"
         val DELETE_ARO_PLAN = "DELETE FROM aro_plans WHERE id = ?"
+        val TOGGLE_ARO_PLAN = "UPDATE aro_plans SET active = ? WHERE id = ?"
 
         val INSERT_ACQUISITION = "INSERT INTO acquisitions (province_id, active, description, effective_date, purchase_price) VALUES (?, ?, ?, ?, ?)"
         val INSERT_ACQUISITION_LICENCE = "INSERT INTO acquisition_licences (acquisition_id, type, licence, liability_amount) VALUES (?, ?, ?, ?)"
         val DELETE_ACQUISITION_LICENCES = "DELETE FROM acquisition_licences WHERE acquisition_id = ?"
         val DELETE_ACQUISITION = "DELETE FROM acquisitions WHERE id = ?"
+        val TOGGLE_ACQUISITION = "UPDATE acquisitions SET active = ? WHERE id = ?"
         val GET_ACQUISITIONS = """
             SELECT
               a.id,

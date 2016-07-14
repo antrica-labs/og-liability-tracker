@@ -107,16 +107,19 @@ class ApiServer : AbstractVerticle() {
         route(HttpMethod.POST, "/api/export_historical_report").handler(handleExportLiabilities)
         route(HttpMethod.GET,  "/api/dispositions").handler(handleGetDispositions)
         route(HttpMethod.POST, "/api/create_disposition").handler(handleCreateDisposition)
+        route(HttpMethod.POST, "/api/toggle_disposition").handler(handleToggleDisposition)
         route(HttpMethod.POST, "/api/delete_disposition").handler(handleDeleteDisposition)
         route(HttpMethod.GET,  "/api/acquisitions").handler(handleGetAcquisitions)
         route(HttpMethod.POST, "/api/create_acquisition").handler(handleCreateAcquisition)
         route(HttpMethod.POST, "/api/delete_acquisition").handler(handleDeleteAcquisition)
+        route(HttpMethod.POST, "/api/toggle_acquisition").handler(handleToggleAcquisition)
         route(HttpMethod.GET,  "/api/acquisition_lmr_history").handler(handleAcquisitionRatings)
         route(HttpMethod.GET,  "/api/acquisition_lmr_forecast").handler(handleForecastAcquisition)
         route(HttpMethod.GET,  "/api/acquisition_lmr_trend").handler(handleFullAcquisitionsTrend)
         route(HttpMethod.GET,  "/api/aro_plans").handler(handleGetAroPlans)
         route(HttpMethod.POST, "/api/create_aro_plan").handler(handleCreateAroPlan)
         route(HttpMethod.POST, "/api/delete_aro_plan").handler(handleDeleteAroPlan)
+        route(HttpMethod.POST, "/api/toggle_aro_plan").handler(handleToggleAroPlan)
 
         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
@@ -496,6 +499,24 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
+    val handleToggleDisposition = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray()
+
+        val id = context.request().formAttributes().get("id")
+        val active = context.request().formAttributes().get("active").toBoolean()
+
+        params.add(active)
+        params.add(id)
+
+        db.updateWithParams(InternalQueries.TOGGLE_DISPOSITION, params) {
+            if (it.succeeded())
+                context.response().endWithJson(JsonObject().put("status", "success"))
+            else
+                sendError(500, context.response(), it.cause())
+        }
+    }
+
     val handleCreateAcquisition = Handler<RoutingContext> { context ->
         val eb = context.get<EventBus>("eventbus")
         val future = Future.future<Void>()
@@ -566,6 +587,24 @@ class ApiServer : AbstractVerticle() {
                     else
                         sendError(500, context.response(), it.cause())
                 }
+            else
+                sendError(500, context.response(), it.cause())
+        }
+    }
+
+    val handleToggleAcquisition = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray()
+
+        val id = context.request().formAttributes().get("id")
+        val active = context.request().formAttributes().get("active").toBoolean()
+
+        params.add(active)
+        params.add(id)
+
+        db.updateWithParams(InternalQueries.TOGGLE_ACQUISITION, params) {
+            if (it.succeeded())
+                context.response().endWithJson(JsonObject().put("status", "success"))
             else
                 sendError(500, context.response(), it.cause())
         }
@@ -652,7 +691,7 @@ class ApiServer : AbstractVerticle() {
         }
     }
 
-    var handleFullAcquisitionsTrend = Handler<RoutingContext> { context ->
+    val handleFullAcquisitionsTrend = Handler<RoutingContext> { context ->
         val db = context.get<SQLConnection>("dbconnection")
         val eb = context.get<EventBus>("eventbus")
         val params = JsonArray()
@@ -1132,6 +1171,24 @@ class ApiServer : AbstractVerticle() {
         params.add(id.toInt())
 
         db.updateWithParams(InternalQueries.DELETE_ARO_PLAN, params) {
+            if (it.succeeded())
+                context.response().endWithJson(JsonObject().put("status", "success"))
+            else
+                sendError(500, context.response(), it.cause())
+        }
+    }
+
+    val handleToggleAroPlan = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val params = JsonArray()
+
+        val id = context.request().formAttributes().get("id")
+        val active = context.request().formAttributes().get("active").toBoolean()
+
+        params.add(active)
+        params.add(id)
+
+        db.updateWithParams(InternalQueries.TOGGLE_ARO_PLAN, params) {
             if (it.succeeded())
                 context.response().endWithJson(JsonObject().put("status", "success"))
             else
