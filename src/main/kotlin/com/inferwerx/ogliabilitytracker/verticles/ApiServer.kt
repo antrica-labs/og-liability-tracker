@@ -120,8 +120,10 @@ class ApiServer : AbstractVerticle() {
         route(HttpMethod.POST, "/api/create_aro_plan").handler(handleCreateAroPlan)
         route(HttpMethod.POST, "/api/delete_aro_plan").handler(handleDeleteAroPlan)
         route(HttpMethod.POST, "/api/toggle_aro_plan").handler(handleToggleAroPlan)
+        route(HttpMethod.GET,  "/api/growth_entities").handler(handleGrowthEntities)
+        route(HttpMethod.GET,  "/api/growth_forecasts").handler(handleGrowthForecast)
 
-        // Serves static files out of the 'webroot' folder
+         // Serves static files out of the 'webroot' folder
         route("/pub/*").handler(StaticHandler.create().setCachingEnabled(false))
 
         // Redirect to the static files by default
@@ -1008,12 +1010,13 @@ class ApiServer : AbstractVerticle() {
 
                             if (entry.getInstant("report_date").compareTo(effectiveDate) >= 0) {
                                 entry.put("liability_value", entry.getDouble("liability_value") - reduction)
-                                entry.put("net_value", entry.getDouble("asset_value") - entry.getDouble("liability_value"))
 
                                 if (entry.getDouble("liability_value") != 0.0)
                                     entry.put("rating", entry.getDouble("asset_value") / entry.getDouble("liability_value"))
                                 else
                                     entry.put("rating", 0.0)
+
+                                entry.put("net_value", entry.getDouble("asset_value") - entry.getDouble("liability_value"))
                             }
                         }
                     }
@@ -1037,12 +1040,13 @@ class ApiServer : AbstractVerticle() {
 
                             entry.put("asset_value", entry.getDouble("asset_value") + incremental.getDouble("asset_value"))
                             entry.put("liability_value", entry.getDouble("liability_value") + incremental.getDouble("liability_value"))
-                            entry.put("net_value", entry.getDouble("asset_value") - entry.getDouble("liability_value"))
 
                             if (entry.getDouble("liability_value") != 0.0)
                                 entry.put("rating", entry.getDouble("asset_value") / entry.getDouble("liability_value"))
                             else
                                 entry.put("rating", 0.0)
+
+                            entry.put("net_value", entry.getDouble("asset_value") - entry.getDouble("liability_value"))
 
                             step++
                         }
@@ -1195,4 +1199,98 @@ class ApiServer : AbstractVerticle() {
                 sendError(500, context.response(), it.cause())
         }
     }
+
+    val handleGrowthEntities = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val eb = context.get<EventBus>("eventbus")
+
+        val params = JsonArray()
+
+        val province = context.request().getParam("province_id").toInt()
+
+        params.add(province)
+
+        db.queryWithParams(InternalQueries.GET_LATEST_REPORT, params) { query ->
+            if (query.failed()) {
+                sendError(500, context.response(), query.cause())
+            } else if (query.result().numRows == 0) {
+                context.response().endWithJson(JsonArray())
+            } else {
+                val startDate = query.result().rows[0].getInstant("report_date")
+                val message = JsonObject().put("request", "entity-list").put("start_date", startDate)
+
+                eb.send<String>("og-liability-tracker.mosaic_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                    if (reply.succeeded()) {
+                        context.response().endWithJson(JsonObject(reply.result().body()))
+                    } else {
+                        sendError(500, context.response(), reply.cause())
+                    }
+                }
+            }
+        }
+    }
+
+    val handleGrowthForecast = Handler<RoutingContext> { context ->
+        val db = context.get<SQLConnection>("dbconnection")
+        val eb = context.get<EventBus>("eventbus")
+
+        val params = JsonArray()
+
+        val province = context.request().getParam("province_id").toInt()
+
+        params.add(province)
+
+        db.queryWithParams(InternalQueries.GET_LATEST_REPORT, params) { dateQuery ->
+            if (dateQuery.failed()) {
+                sendError(500, context.response(), dateQuery.cause())
+            } else if (dateQuery.result().numRows == 0) {
+                context.response().endWithJson(JsonArray())
+            } else {
+                val startDate = dateQuery.result().rows[0].getInstant("report_date")
+
+                db.queryWithParams(InternalQueries.GET_NETBACKS, params) { netbackQuery ->
+                    if (netbackQuery.failed()) {
+                        sendError(500, context.response(), netbackQuery.cause())
+                    } else {
+                        var netback : JsonObject? = null
+
+                        for (nb in netbackQuery.result().rows) {
+                            if (startDate.compareTo(nb.getInstant("effective_date")) >= 0) {
+                                netback = nb
+                                break
+                            }
+                        }
+
+                        if (netback == null) {
+                            sendError(500, context.response(), Throwable("Unable to find netback for data ${startDate}"))
+                        } else {
+                            val message = JsonObject().put("request", "forecast").put("start_date", startDate).put("netback", netback)
+
+                            eb.send<String>("og-liability-tracker.mosaic_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                                if (reply.succeeded()) {
+                                    context.response().endWithJson(JsonObject(reply.result().body()))
+                                } else {
+                                    sendError(500, context.response(), reply.cause())
+                                }
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+    }
 }
+
+/*
+        var netback : JsonObject? = null
+
+        for (obj in netbacks) {
+            val nb = obj as JsonObject
+
+            if (startDate.compareTo(nb.getInstant("effective_date")) >= 0) {
+                netback = nb
+                break
+            }
+        }
+ */

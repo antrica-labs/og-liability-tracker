@@ -26,7 +26,7 @@ class PublicDataHistory : AbstractVerticle() {
                     val netbacks = job.getJsonArray("netbacks")
                     val licences = job.getJsonArray("licences")
 
-                    Class.forName(config().getString("db.jdbc_driver"))
+                    Class.forName(config().getString("db.public.jdbc_driver"))
 
                     connection = DriverManager.getConnection(config().getString("db.public.url"), config().getString("db.public.username"), config().getString("db.public.password"))
 

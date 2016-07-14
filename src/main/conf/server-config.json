@@ -10,5 +10,9 @@
   "db.public.jdbc_driver" : "oracle.jdbc.OracleDriver",
   "db.public.url" : "jdbc:oracle:thin:@204.209.249.204:1521:IHSDATA",
   "db.public.username" : "C_SPYGLASSRESOURCES",
-  "db.public.password" : "transpar3nt"
+  "db.public.password" : "transpar3nt",
+  "db.mosaic.jdbc_driver" : "oracle.jdbc.OracleDriver",
+  "db.mosaic.url" : "jdbc:oracle:thin:@cgyora02.spyglassresources.com:1521:ORAPRD06",
+  "db.mosaic.username" : "BUDGET",
+  "db.mosaic.password" : "login"
 }
