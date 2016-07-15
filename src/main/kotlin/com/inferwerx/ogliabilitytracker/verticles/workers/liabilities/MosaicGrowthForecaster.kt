@@ -85,11 +85,12 @@ class MosaicGrowthForecaster : AbstractVerticle() {
 
                             val gas = row.getDouble("gas_volume")
                             val oil = row.getDouble("oil_volume")
+                            val gasOilEq = gas * shrink / conversion
 
                             month.put("production_month", row.getInstant("production_month"))
                             month.put("gas_volume", gas)
                             month.put("oil_volume", oil)
-                            month.put("revenue", (gas * shrink / conversion + oil) * netbackValue * 3)
+                            month.put("revenue", (gasOilEq + oil) * netbackValue * 3)
 
                             currentEntity!!.getJsonArray("forecast").add(month)
                         }
@@ -108,28 +109,28 @@ class MosaicGrowthForecaster : AbstractVerticle() {
                         for (obj in it.result()) {
                             val revenueEntity = obj as JsonObject
 
-                            val entity = JsonObject().put("entity_name", revenueEntity.getString("entity_name")).put("forecast", JsonArray())
+                            val entity = JsonObject().put("entity", revenueEntity.getString("entity")).put("forecast", JsonArray())
 
-                            var offset = 0
                             var assetValue = 0.0
                             for (obj2 in revenueEntity.getJsonArray("forecast")) {
                                 val record = obj2 as JsonObject
 
                                 assetValue += record.getDouble("revenue")
 
-                                if (offset > 1) {
-                                    val month = JsonObject()
+                                val month = JsonObject()
 
-                                    month.put("report_date", record.getInstant("production_month"))
-                                    month.put("asset_value", assetValue)
-                                    month.put("liability_value", 0.0)
-                                    month.put("rating", 0)
-                                    month.put("net_value", month.getDouble("asset_value") - month.getDouble("liability_value"))
+                                val futureReportDate = record.getInstant("production_month").atZone(ZoneId.systemDefault()).plusMonths(2).toInstant()
 
-                                    entity.getJsonArray("forecast").add(month)
-                                }
+                                month.put("report_date", futureReportDate)
+                                month.put("asset_value", assetValue)
+                                month.put("liability_value", 0.0)
+                                month.put("rating", 0)
+                                month.put("net_value", month.getDouble("asset_value") - month.getDouble("liability_value"))
 
-                                offset++
+                                entity.getJsonArray("forecast").add(month)
+
+
+
                             }
 
                             forecasts.add(entity)

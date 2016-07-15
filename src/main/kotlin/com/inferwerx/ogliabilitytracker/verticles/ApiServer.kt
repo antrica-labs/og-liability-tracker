@@ -25,6 +25,10 @@ import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.*
 
 class ApiServer : AbstractVerticle() {
@@ -159,7 +163,7 @@ class ApiServer : AbstractVerticle() {
      * A quick and easy way to send error messages as a response.
      */
     private fun sendError(statusCode: Int, response: HttpServerResponse, error: Throwable? = null) {
-        response.statusCode = statusCode;
+        response.statusCode = statusCode
 
         val message = JsonObject()
 
@@ -840,6 +844,7 @@ class ApiServer : AbstractVerticle() {
         val baseForecastFuture = Future.future<JsonArray>()
         val acquisitionForecastFuture = Future.future<JsonArray>()
         val aroForecastFuture = Future.future<JsonArray>()
+        val growthForecastFuture = Future.future<JsonObject>()
 
         val province = context.request().getParam("province_id").toInt()
 
@@ -891,6 +896,9 @@ class ApiServer : AbstractVerticle() {
                 db.queryWithParams(InternalQueries.GET_ACTIVE_ACQUISITIONS, provinceParam) { acqQuery ->
                     if (acqQuery.failed()) {
                         acquisitionForecastFuture.fail(acqQuery.cause())
+                    } else if (acqQuery.result().numRows == 0) {
+                        // Return an empty array
+                        acquisitionForecastFuture.complete(JsonArray())
                     } else {
                         val totalPackages = acqQuery.result().numRows
                         val processed = JsonArray()
@@ -903,7 +911,7 @@ class ApiServer : AbstractVerticle() {
 
                                     if (licenceQuery.result().numRows > 0) {
                                         // all rows will have the same effective date, so grab the first one
-                                        val effectiveDate = licenceQuery.result().rows.get(0).getInstant("effective_date")
+                                        val effectiveDate = licenceQuery.result().rows[0].getInstant("effective_date")
 
                                         val message = JsonObject()
                                         message.put("netbacks", netbacks)
@@ -947,6 +955,48 @@ class ApiServer : AbstractVerticle() {
                         }
                     }
                 }
+
+                // Get Mosaic growth forecasts
+                db.queryWithParams(InternalQueries.GET_LATEST_REPORT, provinceParam) { dateQuery ->
+                    if (dateQuery.failed()) {
+                        growthForecastFuture.fail(dateQuery.cause())
+                    } else {
+                        val startDate : Instant
+
+                        if (dateQuery.result().numRows > 0)
+                            startDate = dateQuery.result().rows[0].getInstant("report_date")
+                        else
+                            startDate = ZonedDateTime.now(ZoneId.systemDefault()).toInstant()
+
+                        db.queryWithParams(InternalQueries.GET_NETBACKS, provinceParam) { netbackQuery ->
+                            if (netbackQuery.failed()) {
+                                sendError(500, context.response(), netbackQuery.cause())
+                            } else {
+                                var netback : JsonObject? = null
+
+                                for (nb in netbackQuery.result().rows) {
+                                    if (startDate.compareTo(nb.getInstant("effective_date")) >= 0) {
+                                        netback = nb
+                                    }
+                                }
+
+                                if (netback == null) {
+                                    growthForecastFuture.fail(Throwable("Unable to find netback for data ${startDate}"))
+                                } else {
+                                    val message = JsonObject().put("request", "forecast").put("start_date", startDate).put("netback", netback)
+
+                                    eb.send<String>("og-liability-tracker.mosaic_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
+                                        if (reply.succeeded()) {
+                                            growthForecastFuture.complete(JsonObject(reply.result().body()))
+                                        } else {
+                                            growthForecastFuture.fail(reply.cause())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -958,7 +1008,7 @@ class ApiServer : AbstractVerticle() {
                 aroForecastFuture.complete(JsonArray(aroQuery.result().rows))
         }
 
-        CompositeFuture.all(historyFuture, baseForecastFuture, acquisitionForecastFuture, aroForecastFuture).setHandler { futures ->
+        CompositeFuture.all(historyFuture, baseForecastFuture, acquisitionForecastFuture, aroForecastFuture, growthForecastFuture).setHandler { futures ->
             if (futures.failed()) {
                 sendError(500, context.response(), futures.cause())
             } else {
@@ -966,6 +1016,7 @@ class ApiServer : AbstractVerticle() {
                 val forecast = futures.result().result<JsonArray>(1)
                 val acquisitions = futures.result().result<JsonArray>(2)
                 val aro = futures.result().result<JsonArray>(3)
+                val growth = futures.result().result<JsonObject>(4)
 
                 val combined = JsonArray()
 
@@ -1037,6 +1088,39 @@ class ApiServer : AbstractVerticle() {
 
                         if (entry.getInstant("report_date").compareTo(effectiveDate) >= 0 && step < acquisition.size()) {
                             val incremental = acquisition.getValue(step) as JsonObject
+
+                            entry.put("asset_value", entry.getDouble("asset_value") + incremental.getDouble("asset_value"))
+                            entry.put("liability_value", entry.getDouble("liability_value") + incremental.getDouble("liability_value"))
+
+                            if (entry.getDouble("liability_value") != 0.0)
+                                entry.put("rating", entry.getDouble("asset_value") / entry.getDouble("liability_value"))
+                            else
+                                entry.put("rating", 0.0)
+
+                            entry.put("net_value", entry.getDouble("asset_value") - entry.getDouble("liability_value"))
+
+                            step++
+                        }
+                    }
+                }
+
+                // Layer in growth
+                for (obj in growth.getJsonArray("forecasts")) {
+                    val entity = obj as JsonObject
+                    val entityForecast = entity.getJsonArray("forecast")
+
+                    if (entityForecast.size() < 1)
+                        continue
+
+
+                    val effectiveDate = (entityForecast.getValue(0) as JsonObject).getInstant("report_date")
+                    var step = 0
+
+                    for (obj2 in combined) {
+                        val entry = obj2 as JsonObject
+
+                        if (entry.getInstant("report_date").compareTo(effectiveDate) >= 0 && step < entityForecast.size()) {
+                            val incremental = entityForecast.getValue(step) as JsonObject
 
                             entry.put("asset_value", entry.getDouble("asset_value") + incremental.getDouble("asset_value"))
                             entry.put("liability_value", entry.getDouble("liability_value") + incremental.getDouble("liability_value"))
@@ -1213,10 +1297,14 @@ class ApiServer : AbstractVerticle() {
         db.queryWithParams(InternalQueries.GET_LATEST_REPORT, params) { query ->
             if (query.failed()) {
                 sendError(500, context.response(), query.cause())
-            } else if (query.result().numRows == 0) {
-                context.response().endWithJson(JsonArray())
             } else {
-                val startDate = query.result().rows[0].getInstant("report_date")
+                val startDate : Instant
+
+                if (query.result().numRows > 0)
+                    startDate = query.result().rows[0].getInstant("report_date")
+                else
+                    startDate = ZonedDateTime.now(ZoneId.systemDefault()).toInstant()
+
                 val message = JsonObject().put("request", "entity-list").put("start_date", startDate)
 
                 eb.send<String>("og-liability-tracker.mosaic_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
@@ -1243,10 +1331,13 @@ class ApiServer : AbstractVerticle() {
         db.queryWithParams(InternalQueries.GET_LATEST_REPORT, params) { dateQuery ->
             if (dateQuery.failed()) {
                 sendError(500, context.response(), dateQuery.cause())
-            } else if (dateQuery.result().numRows == 0) {
-                context.response().endWithJson(JsonArray())
             } else {
-                val startDate = dateQuery.result().rows[0].getInstant("report_date")
+                val startDate : Instant
+
+                if (dateQuery.result().numRows > 0)
+                    startDate = dateQuery.result().rows[0].getInstant("report_date")
+                else
+                    startDate = ZonedDateTime.now(ZoneId.systemDefault()).toInstant()
 
                 db.queryWithParams(InternalQueries.GET_NETBACKS, params) { netbackQuery ->
                     if (netbackQuery.failed()) {
@@ -1257,12 +1348,11 @@ class ApiServer : AbstractVerticle() {
                         for (nb in netbackQuery.result().rows) {
                             if (startDate.compareTo(nb.getInstant("effective_date")) >= 0) {
                                 netback = nb
-                                break
                             }
                         }
 
                         if (netback == null) {
-                            sendError(500, context.response(), Throwable("Unable to find netback for data ${startDate}"))
+                            sendError(500, context.response(), Throwable("Unable to find netback for data $startDate"))
                         } else {
                             val message = JsonObject().put("request", "forecast").put("start_date", startDate).put("netback", netback)
 
@@ -1275,22 +1365,8 @@ class ApiServer : AbstractVerticle() {
                             }
                         }
                     }
-
                 }
             }
         }
     }
 }
-
-/*
-        var netback : JsonObject? = null
-
-        for (obj in netbacks) {
-            val nb = obj as JsonObject
-
-            if (startDate.compareTo(nb.getInstant("effective_date")) >= 0) {
-                netback = nb
-                break
-            }
-        }
- */
