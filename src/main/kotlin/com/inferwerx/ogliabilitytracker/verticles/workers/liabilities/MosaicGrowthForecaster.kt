@@ -70,7 +70,9 @@ class MosaicGrowthForecaster : AbstractVerticle() {
                         val forecasts = JsonArray()
                         var currentEntity : JsonObject? = null
 
-                        val shrink = netback.getDouble("shrinkage_factor")
+                        // The shrinkage conversion isn't going to be used (for now) as Mosaic gives us a sales gas number,
+                        // so raw gas would have to be back calculated first which isn't that easy. This will mean that
+                        // the asset value generated here won't match perfectly, but it should be close enough.
                         val conversion = netback.getDouble("oil_equivalent_conversion")
                         val netbackValue = netback.getDouble("netback")
 
@@ -85,7 +87,7 @@ class MosaicGrowthForecaster : AbstractVerticle() {
 
                             val gas = row.getDouble("gas_volume")
                             val oil = row.getDouble("oil_volume")
-                            val gasOilEq = gas * shrink / conversion
+                            val gasOilEq = gas / conversion
 
                             month.put("production_month", row.getInstant("production_month"))
                             month.put("gas_volume", gas)

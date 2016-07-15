@@ -1018,21 +1018,12 @@ class ApiServer : AbstractVerticle() {
                 val aro = futures.result().result<JsonArray>(3)
                 val growth = futures.result().result<JsonObject>(4)
 
+                val trends = JsonObject()
+
+                trends.put("history", history)
+                trends.put("base_forecast", forecast)
+
                 val combined = JsonArray()
-
-                for (obj in history) {
-                    val record = obj as JsonObject
-                    val entry = JsonObject()
-
-                    entry.put("report_date", record.getInstant("report_date"))
-                    entry.put("asset_value", record.getDouble("asset_value"))
-                    entry.put("liability_value", record.getDouble("liability_value"))
-                    entry.put("rating", record.getDouble("rating"))
-                    entry.put("net_value", record.getDouble("net_value"))
-                    entry.put("type", "Historical")
-
-                    combined.add(entry)
-                }
 
                 for (obj in forecast) {
                     val record = obj as JsonObject
@@ -1043,7 +1034,6 @@ class ApiServer : AbstractVerticle() {
                     entry.put("liability_value", record.getDouble("liability_value"))
                     entry.put("rating", record.getDouble("rating"))
                     entry.put("net_value", record.getDouble("net_value"))
-                    entry.put("type", "Forecast")
 
                     combined.add(entry)
                 }
@@ -1137,7 +1127,8 @@ class ApiServer : AbstractVerticle() {
                     }
                 }
 
-                context.response().endWithJson(combined)
+                trends.put("adjusted_forecast", combined)
+                context.response().endWithJson(trends)
             }
         }
     }

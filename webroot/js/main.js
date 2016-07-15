@@ -1,28 +1,8 @@
 var PROVINCE = 1
 
-var netValueDataOrig = {
-    labels: ["January", "February", "March", "April", "May", "June", "July", "August", "September"],
-    datasets: [
-        {
-            label: "Historical",
-            fill: false,
-            backgroundColor: "#CDA694",
-            borderColor: "#AD5755",
-            data: [63259226.71999967, 57381112.25999987, 50542420.19999969, 46350201.140000105, 42194867.309999764, 36926610.67999977, 50212553.44]
-
-        },
-        {
-            label: "Forecast",
-            fill: false,
-            backgroundColor: "#91D8D8",
-            borderColor: "#52B2C0",
-            data: [null, null, null, null, null, null, 50212553.44, -15017276.718553275, -20051379.163761586]
-        }
-    ]
-};
-
 var netValueOptions = {
     responsive: true,
+    tooltipTemplate: "$<%=addCommas(value)%>",
     title: {
         display: true,
         text: 'Net LMR Value [(Asset Value) - (Liability Amount)]'
@@ -35,6 +15,15 @@ var netValueOptions = {
                 }
             }
         }]
+    },
+    tooltips: {
+        callbacks: {
+            label: function(tooltipItem, data) {
+                var value = data.datasets[tooltipItem.datasetIndex].data[tooltipItem.index];
+
+                return  ' $' + Math.round(parseFloat(value)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+            }
+        }
     }
 };
 
@@ -42,47 +31,61 @@ var LmrOverview = React.createClass({
     render: function() {
         return (
             <div>
-                <NetLmrGraph id="netLmrGraph" options={netValueOptions} url={"/api/combined_lmr_trend?province_id=" + PROVINCE} />
+                <CombinedLmrForecastGraph id="netLmrGraph" options={netValueOptions} url={"/api/combined_lmr_trend?province_id=" + PROVINCE} />
                 <LmrInputs />
             </div>
         );
     }
 });
 
-var NetLmrGraph = React.createClass({
+var CombinedLmrForecastGraph = React.createClass({
     getIntialState: function() {
         return { data: [], options: [] };
     },
     getLabelsFromLmrData: function (lmrData) {
         var labels = [];
 
-        for (var index = 0; index < lmrData.length; index++) {
-            var reportDate = moment(lmrData[index].report_date);
+        for (var index = 0; index < lmrData.history.length; index++) {
+            var reportDate = moment(lmrData.history[index].report_date);
 
             labels.push(reportDate.format("MMMM YYYY"));
         }
+
+        for (var index = 0; index < lmrData.base_forecast.length; index++) {
+            var reportDate = moment(lmrData.base_forecast[index].report_date);
+
+            labels.push(reportDate.format("MMMM YYYY"));
+        }
+
 
         return labels
     },
     getPointsFromLmrData: function(lmrData) {
         var historical = [];
-        var forecast = [];
+        var base_forecast = [];
+        var adjusted_forecast = [];
 
-        for (var index = 0; index < lmrData.length; index++) {
-            var assetValue = lmrData[index].asset_value;
-            var liabilityAmount = lmrData[index].liability_value;
+        for (var h = 0; h < lmrData.history.length; h++) {
+            historical[h] = lmrData.history[h].net_value
+        }
 
-            if (lmrData[index].type === "Historical") {
-                historical.push(assetValue - liabilityAmount);
-                forecast.push(null);
-            } else {
-                forecast.push(assetValue - liabilityAmount)
-            }
+        for (var i = 0; i < historical.length; i++) {
+            base_forecast.push(null);
+            adjusted_forecast.push(null);
+        }
+
+        for (var j = 0; j < lmrData.base_forecast.length; j++) {
+            base_forecast.push(lmrData.base_forecast[j].net_value);
+        }
+
+        for (var k = 0; k < lmrData.adjusted_forecast.length; k++) {
+            adjusted_forecast.push(lmrData.adjusted_forecast[k].net_value);
         }
 
         return {
             historical: historical,
-            forecast: forecast
+            base_forecast: base_forecast,
+            adjusted_forecast: adjusted_forecast
         };
     },
     componentDidMount: function() {
@@ -95,7 +98,8 @@ var NetLmrGraph = React.createClass({
                 var data = this.getPointsFromLmrData(lmr);
 
                 // Set the first forecast to be the same as the last history data point in order to connect the graph
-                data.forecast[data.historical.length - 1] = data.historical[data.historical.length - 1];
+                data.base_forecast[data.historical.length - 1] = data.historical[data.historical.length - 1];
+                data.adjusted_forecast[data.historical.length - 1] = data.historical[data.historical.length - 1];
 
                 var netValueData = {
                     labels: labels,
@@ -108,11 +112,18 @@ var NetLmrGraph = React.createClass({
                             data: data.historical
                         },
                         {
-                            label: "Forecast",
+                            label: "Base forecast",
+                            fill: false,
+                            backgroundColor: "#CEB675",
+                            borderColor: "#AD9962",
+                            data: data.base_forecast
+                        },
+                        {
+                            label: "Adjusted Forecast",
                             fill: false,
                             backgroundColor: "#91D8D8",
                             borderColor: "#52B2C0",
-                            data: data.forecast
+                            data: data.adjusted_forecast
                         }
                     ]
                 };
