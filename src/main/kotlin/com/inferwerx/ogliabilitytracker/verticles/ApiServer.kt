@@ -284,6 +284,8 @@ class ApiServer : AbstractVerticle() {
         db.queryWithParams(InternalQueries.GET_LATEST_REPORT, params) { query ->
             if (query.failed())
                 sendError(500, context.response(), query.cause())
+            else if (query.result().numRows == 0)
+                context.response().endWithJson(JsonObject().put("status", "No reports"))
             else
                 context.response().endWithJson(query.result().rows[0])
         }
@@ -681,6 +683,7 @@ class ApiServer : AbstractVerticle() {
 
                         forecastMessage.put("netbacks", netbacks.result().rows)
                         forecastMessage.put("historical_lmr", JsonArray(reply.result().body()))
+                        forecastMessage.put("sample_size", 6)
 
                         eb.send<String>("og-liability-tracker.simple_forecaster", forecastMessage.encode(), DeliveryOptions().setSendTimeout(120000)) { forecastReply ->
                             if (forecastReply.succeeded()) {
@@ -733,6 +736,7 @@ class ApiServer : AbstractVerticle() {
                         
                         forecastMessage.put("netbacks", netbacks)
                         forecastMessage.put("historical_lmr", historical)
+                        forecastMessage.put("sample_size", 6)
 
                         eb.send<String>("og-liability-tracker.simple_forecaster", forecastMessage.encode(), DeliveryOptions().setSendTimeout(120000)) { forecastReply ->
                             if (forecastReply.failed()) 
@@ -925,6 +929,7 @@ class ApiServer : AbstractVerticle() {
 
                                             forecastMessage.put("netbacks", netbacks)
                                             forecastMessage.put("historical_lmr", JsonArray(reply.result().body()))
+                                            forecastMessage.put("sample_size", 6)
 
                                             eb.send<String>("og-liability-tracker.simple_forecaster", forecastMessage.encode(), DeliveryOptions().setSendTimeout(120000)) { forecastReply ->
                                                 if (forecastReply.failed())

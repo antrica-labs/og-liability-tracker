@@ -2,7 +2,6 @@ var PROVINCE = 1;
 
 var netValueOptions = {
     responsive: true,
-    tooltipTemplate: "$<%=addCommas(value)%>",
     title: {
         display: true,
         text: 'Net LMR Value [(Asset Value) - (Liability Amount)]'
@@ -108,6 +107,7 @@ var CombinedLmrForecastGraph = React.createClass({
                         {
                             label: "Historical",
                             fill: false,
+                            lineTension: 0,
                             backgroundColor: "#CDA694",
                             borderColor: "#AD5755",
                             data: data.historical
@@ -115,6 +115,7 @@ var CombinedLmrForecastGraph = React.createClass({
                         {
                             label: "Base forecast",
                             fill: false,
+                            lineTension: 0,
                             backgroundColor: "#CEB675",
                             borderColor: "#AD9962",
                             data: data.base_forecast
@@ -122,6 +123,7 @@ var CombinedLmrForecastGraph = React.createClass({
                         {
                             label: "Adjusted Forecast",
                             fill: false,
+                            lineTension: 0,
                             backgroundColor: "#91D8D8",
                             borderColor: "#52B2C0",
                             data: data.adjusted_forecast

@@ -20,8 +20,14 @@ class HistoricalRatingsForecaster : AbstractVerticle() {
 
                 val netbacks = job.getJsonArray("netbacks")
                 val history = job.getJsonArray("historical_lmr")
+                val sampleSize = job.getInteger("sample_size")
 
-                val results = forecastFromHistorical(history, netbacks)
+                val results : JsonArray
+
+                if (history.size() > 0)
+                    results = forecastFromHistorical(history, netbacks, sampleSize)
+                else
+                    results = JsonArray()
 
                 message.reply(results.encode())
             } catch (t : Throwable) {
@@ -30,13 +36,26 @@ class HistoricalRatingsForecaster : AbstractVerticle() {
         }
     }
 
-    private fun forecastFromHistorical(history : JsonArray, netbacks : JsonArray) : JsonArray {
+    private fun forecastFromHistorical(history : JsonArray, netbacks : JsonArray, sampleSize : Int?) : JsonArray {
         val forecast = JsonArray()
         val lastLmr = history.getJsonObject(history.size() - 1)
         val constantLiabilityValue = lastLmr.getDouble("liability_value")
 
         val monthlyVolumes = calculateMonthlyVolumes(history, netbacks)
-        val decline = calculateAverageDecline(monthlyVolumes)
+        val sample : ArrayList<Double>
+
+        // The sample size is used to tell the forecaster to only use the last [sampleSize] number of months as its sample.
+        if (sampleSize != null && monthlyVolumes.size >= sampleSize) {
+            sample = ArrayList<Double>()
+
+            for (i in sampleSize downTo 1) {
+                sample.add(monthlyVolumes[monthlyVolumes.size - i])
+            }
+        } else {
+            sample = monthlyVolumes
+        }
+
+        val decline = calculateAverageDecline(sample)
 
         val lastMonth = LocalDateTime.ofInstant(lastLmr.getInstant("report_date"), ZoneId.of("Z")).withDayOfMonth(1)
         var previous = history.getValue(history.size() - 1) as JsonObject
