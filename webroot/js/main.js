@@ -1,4 +1,4 @@
-var PROVINCE = 1
+var PROVINCE = 1;
 
 var netValueOptions = {
     responsive: true,
@@ -26,6 +26,7 @@ var netValueOptions = {
         }
     }
 };
+
 
 var LmrOverview = React.createClass({
     render: function() {
@@ -157,10 +158,10 @@ var LmrInputs = React.createClass({
         return (
             <div id="lmr_toggles">
                 <div className="row">
-                    <DivestmentList />
-                    <AcquisitionList />
-                    <GrowthProjectsList />
-                    <AroList />
+                    <DivestmentList listUrl={"/api/dispositions?province_id=" + PROVINCE} pollInterval={60000} />
+                    <AcquisitionList listUrl={"/api/acquisitions?province_id=" + PROVINCE} pollInterval={60000} />
+                    <GrowthProjectsList listUrl={"/api/growth_entities?province_id=" + PROVINCE} pollInterval={60000} />
+                    <AroList listUrl={"/api/aro_plans?province_id=" + PROVINCE} pollInterval={60000} />
                 </div>
             </div>
         )
@@ -168,28 +169,43 @@ var LmrInputs = React.createClass({
 });
 
 var AcquisitionList = React.createClass({
+    loadLatest: function() {
+        $.ajax({
+            url: this.props.listUrl,
+            dataType: 'json',
+            cache: false,
+            success: function(data) {
+                this.setState({ data: data });
+            }.bind(this),
+            error: function(xhr, status, err) {
+                console.error(this.props.url, status, err.toString());
+            }.bind(this)
+        });
+    },
+    getInitialState: function() {
+        return { data : [] } ;
+    },
+    componentDidMount: function() {
+        this.loadLatest();
+        //setInterval(this.loadLatest, this.props.pollInterval);
+    },
     render: function () {
+        var nodes = this.state.data.map(function(item) {
+            return (
+               <li className="optional acquisition" key={item.id}>
+                   <span className="description">{item.description}</span>
+                   <span className="effective_date">{moment(item.effective_date).format("MMMM D, YYYY")}</span>
+                   <span className="purchase_price">${parseFloat(item.purchase_price).toFixed(2)}</span>
+               </li>
+            );
+        });
+
         return (
             <div id="acquisition_list" className="col-md-3 toggle-list">
                 <h4>Acquisitions</h4>
 
-                <button type="button" className="btn btn-default">Add acquisition</button>
-
                 <ul className="toggles">
-                    <li className="optional">
-                        <div className="input-group">
-                            <span className="input-group-addon"><input type="checkbox" className="activation" /></span>
-                            <input type="text" className="form-control" value="Non-Op Buy Outs" readOnly="true" />
-                            <span className="input-group-addon"><a href="#" className="delete"><span className="glyphicon glyphicon-remove"></span></a></span>
-                        </div>
-                    </li>
-                    <li className="optional">
-                        <div className="input-group">
-                            <span className="input-group-addon"><input type="checkbox" className="activation" /></span>
-                            <input type="text" className="form-control" value="Shadow Creek Project" readOnly="true" />
-                            <span className="input-group-addon"><a href="#" className="delete"><span className="glyphicon glyphicon-remove"></span></a></span>
-                        </div>
-                    </li>
+                    {nodes}
                 </ul>
             </div>
         )
@@ -197,21 +213,44 @@ var AcquisitionList = React.createClass({
 });
 
 var DivestmentList = React.createClass({
+    loadLatest: function() {
+        $.ajax({
+            url: this.props.listUrl,
+            dataType: 'json',
+            cache: false,
+            success: function(data) {
+                this.setState({ data: data });
+            }.bind(this),
+            error: function(xhr, status, err) {
+                console.error(this.props.url, status, err.toString());
+            }.bind(this)
+        });
+    },
+    getInitialState: function() {
+        return { data : [] } ;
+    },
+    componentDidMount: function() {
+        this.loadLatest();
+        //setInterval(this.loadLatest, this.props.pollInterval);
+    },
     render: function () {
+        var nodes = this.state.data.map(function(item) {
+            return (
+                <li className="optional acquisition" key={item.id}>
+                    <span className="description">{item.description}</span>
+                    <span className="effective_date">{moment(item.effective_date).format("MMMM D, YYYY")}</span>
+                    <span className="sale_price">${parseFloat(item.sale_price).toFixed(2)}</span>
+                    <span className="licence_count">{item.licence_count} licences</span>
+                </li>
+            );
+        });
+
         return (
             <div id="divestment_list" className="col-md-3 toggle-list">
-                <h4>Divestments</h4>
-
-                <button type="button" className="btn btn-default">Add divestment</button>
+                <h4>Licence Transfers</h4>
 
                 <ul className="toggles">
-                    <li className="optional">
-                        <div className="input-group">
-                            <span className="input-group-addon"><input type="checkbox" className="activation" /></span>
-                            <input type="text" className="form-control" value="Dixonville transfer" readOnly="true" />
-                            <span className="input-group-addon"><a href="#" className="delete"><span className="glyphicon glyphicon-remove"></span></a></span>
-                        </div>
-                    </li>
+                    {nodes}
                 </ul>
             </div>
         )
@@ -219,31 +258,86 @@ var DivestmentList = React.createClass({
 });
 
 var GrowthProjectsList = React.createClass({
+    loadLatest: function() {
+        $.ajax({
+            url: this.props.listUrl,
+            dataType: 'json',
+            cache: false,
+            success: function(data) {
+                this.setState({ data: data });
+            }.bind(this),
+            error: function(xhr, status, err) {
+                console.error(this.props.url, status, err.toString());
+            }.bind(this)
+        });
+    },
+    getInitialState: function() {
+        return { data : [] } ;
+    },
+    componentDidMount: function() {
+        this.loadLatest();
+        //setInterval(this.loadLatest, this.props.pollInterval);
+    },
     render: function () {
+        var nodes = this.state.data.map(function(item) {
+            return (
+                <li className="optional acquisition" key={item.id}>
+                    <span className="description">{item.entity_name}</span>
+                    <span className="effective_date">{moment(item.start_date).format("MMMM D, YYYY")}</span>
+                </li>
+            );
+        });
+
         return (
             <div id="groth_project_list" className="col-md-3 toggle-list">
                 <h4>Growth Projects</h4>
+
+                <ul className="toggles">
+                    {nodes}
+                </ul>
             </div>
         )
     }
 });
 
 var AroList = React.createClass({
+    loadLatest: function() {
+        $.ajax({
+            url: this.props.listUrl,
+            dataType: 'json',
+            cache: false,
+            success: function(data) {
+                this.setState({ data: data });
+            }.bind(this),
+            error: function(xhr, status, err) {
+                console.error(this.props.url, status, err.toString());
+            }.bind(this)
+        });
+    },
+    getInitialState: function() {
+        return { data : [] } ;
+    },
+    componentDidMount: function() {
+        this.loadLatest();
+        //setInterval(this.loadLatest, this.props.pollInterval);
+    },
     render: function () {
+        var nodes = this.state.data.map(function(item) {
+            return (
+                <li className="optional acquisition" key={item.id}>
+                    <span className="description">{item.description}</span>
+                    <span className="effective_date">{moment(item.effective_date).format("MMMM D, YYYY")}</span>
+                    <span className="cost">${parseFloat(item.cost).toFixed(2)}</span>
+                </li>
+            );
+        });
+
         return (
             <div id="aro_project_list" className="col-md-3 toggle-list">
                 <h4>ARO Projects</h4>
 
-                <button type="button" className="btn btn-default">Add project</button>
-
                 <ul className="toggles">
-                    <li className="optional">
-                        <div className="input-group">
-                            <span className="input-group-addon"><input type="checkbox" className="activation" /></span>
-                            <input type="text" className="form-control" value="Administration Projects" readOnly="true" />
-                            <span className="input-group-addon"><a href="#" className="delete"><span className="glyphicon glyphicon-remove"></span></a></span>
-                        </div>
-                    </li>
+                    {nodes}
                 </ul>
             </div>
         )
@@ -252,6 +346,6 @@ var AroList = React.createClass({
 
 ReactDOM.render(
     <LmrOverview />
-    ,    
+    ,
     document.getElementById('content')
 );

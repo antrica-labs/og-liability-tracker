@@ -111,9 +111,20 @@ class InternalQueries {
         """
 
         val GET_LATEST_REPORT = """
-            SELECT max(report_date) as report_date
-            FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
-            WHERE e.province_id = ?
+            SELECT
+              report_date,
+              sum(asset_value)                        AS asset_value,
+              sum(liability_value)                    AS liability_value,
+              sum(asset_value) / sum(liability_value) AS rating,
+              sum(asset_value) - sum(liability_value) AS net_value
+            FROM entity_ratings
+            WHERE
+              report_date = (
+                SELECT max(report_date) AS report_date
+                FROM entity_ratings r INNER JOIN entities e ON r.entity_id = e.id
+                WHERE e.province_id = ?
+              )
+            GROUP BY report_date
         """
 
         val GET_NETBACKS = "SELECT effective_date, netback, shrinkage_factor, oil_equivalent_conversion FROM historical_netbacks WHERE province_id = ? ORDER BY effective_date ASC"
@@ -192,6 +203,7 @@ class InternalQueries {
         val GET_ACQUISITION_LICENCES = """
             SELECT
               l.id,
+              a.effective_date,
               p.short_name AS province_short_name,
               l.type,
               l.licence,

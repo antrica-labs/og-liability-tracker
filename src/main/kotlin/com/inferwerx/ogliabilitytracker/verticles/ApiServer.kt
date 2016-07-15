@@ -285,7 +285,7 @@ class ApiServer : AbstractVerticle() {
             if (query.failed())
                 sendError(500, context.response(), query.cause())
             else
-                context.response().endWithJson(query.result().rows)
+                context.response().endWithJson(query.result().rows[0])
         }
     }
 
@@ -905,7 +905,7 @@ class ApiServer : AbstractVerticle() {
 
                         try {
                             for (row in acqQuery.result().rows) {
-                                db.queryWithParams(InternalQueries.GET_ACTIVE_ACQUISITION_LICENCES, provinceParam) { licenceQuery ->
+                                db.queryWithParams(InternalQueries.GET_ACQUISITION_LICENCES, JsonArray().add(row.getInteger("id"))) { licenceQuery ->
                                     if (licenceQuery.failed())
                                         throw licenceQuery.cause()
 
@@ -1300,7 +1300,7 @@ class ApiServer : AbstractVerticle() {
 
                 eb.send<String>("og-liability-tracker.mosaic_forecaster", message.encode(), DeliveryOptions().setSendTimeout(120000)) { reply ->
                     if (reply.succeeded()) {
-                        context.response().endWithJson(JsonObject(reply.result().body()))
+                        context.response().endWithJson(JsonObject(reply.result().body()).getJsonArray("entities"))
                     } else {
                         sendError(500, context.response(), reply.cause())
                     }

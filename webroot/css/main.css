@@ -24,3 +24,16 @@ body {
 .toggle-list ul.toggles li.optional a.delete {
     color: #ad5755;
 }
+
+.toggles li {
+    padding-bottom: 1.25em;
+}
+
+.toggles span {
+    display: block;
+}
+
+.toggles .description {
+    font-size: 1.20em;
+}
+
